@@ -1,0 +1,39 @@
+<div id="view-user-menu" class="screen screen-center">
+    <div class="card">
+        <h2>User Menu</h2>
+        <p class="subtitle">Select an operational action</p>
+        <button onclick="showView('view-user')">Create New Report</button>
+        <button class="btn-secondary" onclick="openUserHistory()">View My Reports</button>
+    </div>
+</div>
+
+<div id="view-dept-head" class="screen screen-center">
+    <div class="card">
+        <h2>PIC Menu</h2>
+        <p class="subtitle">Select an operational action</p>
+        <button onclick="showView('view-user')">Create New Report</button>
+        <button class="btn-secondary" onclick="showView('view-pic-update')">Update Task List</button>
+        <button onclick="openUserHistory()" style="margin-top: 10px;">My Input History</button>
+    </div>
+</div>
+
+<div id="view-md-menu" class="screen screen-center">
+    <div class="card">
+        <h2>Management Menu</h2>
+        <p class="subtitle">Select an operational action</p>
+        <button onclick="showView('view-md')">View Monitoring Dashboard</button>
+        <button class="menu-btn btn-secondary" onclick="showView('view-mom-archive')" style="margin-bottom: 10px;">MOM Archives</button>
+        <button onclick="showView('view-admin')">Manage Users</button>
+        <button class="btn-secondary" onclick="showView('view-manage-dept')"">Manage Departments</button>
+    </div>
+</div>
+
+<div id="view-ktt-menu" class="screen">
+    <div class="card" style="text-align: center; width: 400px; margin: 0 auto; margin-top: 50px;">
+        <h2>KTT Dashboard</h2>
+        <p class="subtitle" style="margin-bottom: 24px;">Monitor and review all PICA reports.</p>
+        
+        <button onclick="showView('view-md'); loadDashboardMD();" style="width: 100%; margin-bottom: 12px; padding: 14px;">Review All Issues</button>
+        <button class="menu-btn btn-secondary" onclick="showView('view-mom-archive')">MOM Archives</button>
+    </div>
+</div>

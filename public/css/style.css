@@ -1,0 +1,349 @@
+/* --- CSS VARIABLES (PALET WARNA BARU SAAS) --- */
+:root {
+    --blue-dark: #3957ED;  /* Royal Blue: Teks utama, border aktif, background tombol */
+    --blue-main: #5a8cf1;  /* Warna transisi tengah untuk gradasi */
+    --blue-light: #80C8F6; /* Light Blue: Aksen terang, hover tombol */
+    --blue-pale: #E0F2FE;  /* Sangat pudar: Background badge, efek timeline, shadow */
+}
+
+/* --- CSS CLEAN & MINIMALIST --- */
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; background-color: #f3f4f6; color: #1f2937; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Header menggunakan efek Gradasi */
+header { 
+    background: linear-gradient(135deg, var(--blue-light), var(--blue-dark)); 
+    padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; 
+    box-shadow: 0 4px 15px rgba(57, 87, 237, 0.3); border: none; z-index: 10; 
+}
+.header-brand { 
+    display: flex; 
+    align-items: center; 
+    gap: 12px; /* Jarak antara logo dan teks */
+}
+
+.brand-logo {
+    /* height: auto; */
+    width: 80px;
+    /* Memberikan pendaran putih halus di belakang logo */
+    filter: drop-shadow(0px 0px 8px rgba(255, 255, 255, 1)); 
+}
+
+.header-title { 
+    font-size: 18px; 
+    font-weight: 600; 
+    color: #ffffff; 
+    letter-spacing: 0.5px; 
+    margin: 0;
+}
+.header-info { display: flex; align-items: center; gap: 24px; font-size: 14px; color: #f1f5f9; } 
+
+footer { padding: 12px 32px; font-size: 12px; color: #9ca3af; display: flex; justify-content: space-between; margin-top: auto; }
+.main-content { flex: 1; position: relative; }
+
+/* 1. UBAH CLASS .screen DAN TAMBAHKAN .screen-center */
+.screen { display: none; height: 100%; width: 100%; justify-content: safe center; align-items: safe center; flex-direction: column; padding-top: 40px; box-sizing: border-box; overflow-y: auto; padding-bottom: 40px; opacity: 0; animation: fadeIn 0.3s ease forwards; }
+.screen-center { justify-content: safe center; padding-top: 0; padding-bottom: 0; }
+.active { display: flex; }
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- MODERNISASI TABEL (SAAS STYLE) --- */
+.table-container { overflow-x: auto; overflow-y: auto; margin: 16px 0 0; border: 1px solid #e5e7eb; border-radius: 10px; max-height: min(45vh, 360px); background: #fff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+.table-footer { padding: 12px 4px 4px; font-size: 12px; color: #6b7280; text-align: right; }
+table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; font-size: 13px; }
+th { background-color: #f8fafc; font-weight: 600; color: #475569; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; padding: 16px; border-bottom: 1px solid #e5e7eb; position: sticky; top: 0; z-index: 2; }
+td { padding: 16px; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: middle; transition: background-color 0.2s; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background-color: #f1f5f9; }
+
+/* --- CSS GRID KHUSUS HALAMAN ADMIN --- */
+.admin-grid { display: grid; grid-template-columns: 300px 1fr; gap: 32px; text-align: left; align-items: start; }
+.admin-panel { background: #f8fafc; padding: 24px; border-radius: 12px; border: 1px solid #e5e7eb; }
+
+/* 4. SISTEM GRID UNTUK FORM */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; text-align: left; }
+.form-full { grid-column: span 2; }
+.form-group label { display: block; font-size: 13px; font-weight: 600; color: #4b5563; margin-bottom: 6px; }
+.form-group input, .form-group select, .form-group textarea { margin: 0; width: 100%; }
+
+/* --- UBAH BAGIAN CARD --- */
+.card { 
+    background: #ffffff; 
+    padding: 40px; 
+    border-radius: 12px; 
+    box-shadow: 0 10px 30px rgba(57, 87, 237, 0.1); /* Bayangan menyesuaikan Royal Blue */
+    border: 1px solid #e5e7eb; 
+    border-top: 6px solid var(--blue-dark); /* Aksen warna utama di atas */
+    width: 400px; 
+    text-align: center; 
+}
+.card-wide { width: 95%; max-width: 1400px; max-height: 85vh; display: flex; flex-direction: column; padding: 30px; }
+.card-admin { width: 90%; max-width: 1000px; display: flex; flex-direction: row; gap: 40px; text-align: left; align-items: flex-start; }
+
+h2 { font-weight: 600; margin-top: 0; color: #111827; }
+p.subtitle { color: #6b7280; font-size: 14px; margin-bottom: 24px; margin-top: -10px;}
+
+/* Implementasi Palet pada Form */
+input, select, textarea { width: 100%; padding: 12px 16px; margin: 8px 0 16px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; font-size: 14px; background-color: #ffffff; transition: all 0.2s; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--blue-dark); box-shadow: 0 0 0 3px var(--blue-pale); }
+
+/* --- UBAH BAGIAN TOMBOL --- */
+button { background: var(--blue-dark); color: white; border: none; font-weight: 500; cursor: pointer; transition: 0.2s; padding: 12px 24px; border-radius: 8px; font-size: 14px; width: 100%; }
+button:hover { background: var(--blue-light); color: #111827; } /* Saat di-hover warnanya menjadi terang (Light Blue) */
+
+.btn-secondary { background: #ffffff; color: var(--blue-dark); border: 1px solid var(--blue-dark); margin-top: 8px;}
+.btn-secondary:hover { background: var(--blue-pale); color: var(--blue-dark);}
+.btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; background: #ffffff; }
+.btn-secondary:disabled:hover { background: #ffffff; }
+
+.btn-danger { background: #fee2e2; color: #b91c1c; border: none;}
+.btn-danger:hover { background: #fecaca; }
+.btn-sm { padding: 6px 16px; font-size: 12px; width: auto; margin: 0; border-radius: 6px; white-space: nowrap; }
+
+.logout-btn { background: rgba(255, 255, 255, 0.15); color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.3); padding: 6px 16px; border-radius: 6px; width: auto; margin: 0; transition: 0.2s;}
+.logout-btn:hover { background: #fee2e2; color: #b91c1c; border-color: transparent; }
+
+/* Implementasi Palet pada Badge Status */
+.badge { padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 500; display: inline-block; text-align: center; }
+.badge-progress { background: var(--blue-pale); color: var(--blue-dark); }
+.badge-open { background: #fee2e2; color: #b91c1c; }
+.badge-prio { background: #fef3c7; color: #92400e; }
+.badge-updated { background: #d1fae5; color: #059669; }
+.badge-not-updated { background: #fef3c7; color: #b45309; }
+
+/* ========================================== */
+/* ANIMASI MODAL MASUK & KELUAR               */
+/* ========================================== */
+.modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex !important; justify-content: center; align-items: center;
+    z-index: 9999; pointer-events: none; visibility: hidden; opacity: 0;
+    transition: visibility 0.3s, opacity 0.3s ease-in-out;
+}
+.modal-overlay.show { visibility: visible; opacity: 1; pointer-events: auto; }
+
+.modal-box {
+    background: white; padding: 24px; border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    transform: scale(0.8) translateY(-30px); opacity: 0;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+}
+.modal-overlay.show .modal-box { transform: scale(1) translateY(0); opacity: 1; }   
+.modal-box h3 { margin-top: 0; color: #111827; font-size: 18px;}
+.modal-box p { color: #6b7280; margin-bottom: 24px; font-size: 14px; line-height: 1.5;}
+
+/* --- IMPLEMENTASI PALET PADA TIMELINE --- */
+.detail-layout { display: flex; gap: 30px; margin-top: 20px; text-align: left;}
+.detail-left { flex: 1; background: #f9fafb; padding: 20px; border-radius: 12px; border: 1px solid #e5e7eb; height: fit-content; }
+.detail-right { flex: 1.5; padding-left: 10px; max-height: 55vh; overflow-y: auto; padding-right: 15px;}
+
+/* Custom Scrollbar menggunakan Light Blue */
+.detail-right::-webkit-scrollbar { width: 6px; }
+.detail-right::-webkit-scrollbar-thumb { background-color: var(--blue-light); border-radius: 10px; }
+
+.timeline { border-left: 2px solid var(--blue-pale); margin-left: 10px; padding-left: 24px; position: relative; }
+.timeline-item { margin-bottom: 24px; position: relative; }
+/* Titik Timeline menggunakan Royal Blue */
+.timeline-item::before { content: ''; position: absolute; left: -31px; top: 4px; width: 12px; height: 12px; border-radius: 50%; background: var(--blue-dark); border: 3px solid var(--blue-pale); }
+
+.timeline-date { font-size: 12px; color: #6b7280; font-weight: 600; margin-bottom: 6px; display: flex; justify-content: space-between; }
+.timeline-box { background: white; padding: 16px; border-radius: 8px; border: 1px solid var(--blue-pale); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+.timeline-action { font-size: 14px; color: #1f2937; margin: 0 0 10px 0; line-height: 1.5; }
+.timeline-remark { font-size: 13px; color: #854d0e; background: #fefce8; padding: 10px; border-radius: 6px; border-left: 3px solid #facc15; margin: 0; }
+
+/* --- DESAIN LOGIN SPLIT (SaaS STYLE) --- */
+.login-split-card {
+    margin-top: 32px; display: flex; width: 900px; height: 550px; background: #ffffff;
+    border-radius: 24px; box-shadow: 0 24px 50px rgba(57, 87, 237, 0.15); /* Shadow biru gelap */
+    overflow: hidden;
+}
+
+.login-form-side { flex: 1; padding: 50px 60px; display: flex; flex-direction: column; justify-content: center; }
+.login-form-side .input-wrapper { text-align: left; margin-bottom: 20px; }
+.login-form-side label { display: block; font-size: 13px; font-weight: 600; color: #4b5563; margin-bottom: 8px; }
+.login-form-side input { margin: 0; padding: 14px 16px; border-radius: 12px; background-color: #f9fafb; border: 1px solid #e5e7eb; }
+.login-form-side input:focus { background-color: #ffffff; border-color: var(--blue-dark); box-shadow: 0 0 0 4px var(--blue-pale); }
+
+/* Tombol Login menggunakan Gradient */
+.btn-login-main {
+    background: linear-gradient(135deg, var(--blue-light), var(--blue-dark));
+    padding: 16px; font-size: 15px; font-weight: 600; border-radius: 12px; margin-top: 10px;
+    box-shadow: 0 8px 20px rgba(57, 87, 237, 0.3); color: white;
+    transition: all 0.3s ease;
+}
+.btn-login-main:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 25px rgba(57, 87, 237, 0.4);
+    background: linear-gradient(135deg, var(--blue-main), var(--blue-dark));
+    color: white; /* Tetap putih karena backgroundnya gelap */
+}
+
+/* Kolom Kanan: Gambar / Ilustrasi Banner menggunakan Gradient */
+.login-image-side {
+    flex: 1.2;
+    background: linear-gradient(135deg, var(--blue-light), var(--blue-dark));
+    padding: 50px; display: flex; flex-direction: column; justify-content: flex-end;
+    text-align: left; position: relative;
+}
+
+.login-image-side::before {
+    content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: linear-gradient(to top, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 80%);
+    z-index: 1;
+}
+
+.login-image-content { position: relative; z-index: 2; }
+/* --- STYLING KHUSUS KOTAK PENCARIAN (SEARCH BAR) --- */
+.search-input {
+    width: 280px; /* Lebar tetap agar proporsional sejajar dengan tombol */
+    margin: 0; /* Menimpa margin bawaan input form */
+    padding: 8px 16px; /* Dibuat sedikit lebih ramping dari input form standar */
+    font-size: 13px;
+    color: #1f2937;
+    background-color: #f9fafb; /* Sedikit abu-abu agar kontras dengan background putih card */
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+}
+
+/* Penyesuaian warna teks placeholder (ikon 🔍 dan teks "Cari...") */
+.search-input::placeholder {
+    color: #9ca3af;
+    font-weight: 400;
+}
+
+/* Efek saat sedang diketik (Focus) - Menggunakan palet Royal Blue */
+.search-input:focus {
+    background-color: #ffffff;
+    border-color: var(--blue-dark);
+    box-shadow: 0 0 0 3px var(--blue-pale);
+    outline: none;
+    width: 320px; /* Opsional: Efek memanjang sedikit saat diklik layaknya web modern */
+}
+
+/* ========================================== */
+/* CUSTOM FILE UPLOAD DROPZONE                */
+/* ========================================== */
+.file-upload-wrapper {
+    position: relative;
+    width: 100%;
+    height: 90px;
+    border: 2px dashed #d1d5db;
+    border-radius: 12px;
+    background-color: #f9fafb;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 8px;
+    box-sizing: border-box;
+}
+
+/* Efek saat kursor diarahkan (Hover) */
+.file-upload-wrapper:hover {
+    border-color: var(--blue-main);
+    background-color: var(--blue-pale);
+}
+
+/* Menyembunyikan input asli tapi tetap bisa diklik karena memenuhi seluruh area kotak */
+.file-upload-wrapper input[type="file"] {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    margin: 0;
+}
+
+.file-upload-icon {
+    font-size: 24px;
+    pointer-events: none; /* Agar klik diteruskan ke input asli di bawahnya */
+}
+
+.file-upload-text {
+    font-size: 13px;
+    color: #6b7280;
+    margin-top: 4px;
+    pointer-events: none;
+}
+
+/* Teks nama file yang muncul saat file sudah dipilih */
+.file-name-display {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--blue-dark);
+    margin-top: 4px;
+    pointer-events: none;
+    text-align: center;
+    padding: 0 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 90%;
+}
+
+/* ========================================== */
+/* TOAST ALERT STYLES                         */
+/* ========================================== */
+.toast-alert {
+    position: fixed;
+    top: -100px; /* Posisi awal tersembunyi di atas layar */
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffffff;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    z-index: 9999;
+    /* Animasi masuk dan keluar yang smooth dan sedikit memantul */
+    transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55); 
+    opacity: 0;
+    pointer-events: none; /* Agar tidak menghalangi klik di bawahnya jika transparan */
+    min-width: 320px;
+    border-left: 6px solid #10b981; /* Warna garis samping default (Hijau) */
+}
+
+/* Kelas saat notifikasi aktif */
+.toast-alert.show {
+    top: 40px; /* Meluncur turun ke posisi ini */
+    opacity: 1;
+}
+
+/* Lingkaran Ikon */
+.toast-icon {
+    font-size: 20px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #d1fae5;
+    color: #059669;
+}
+
+.toast-content h3 {
+    margin: 0 0 4px 0;
+    font-size: 15px;
+    color: #111827;
+}
+
+.toast-content p {
+    margin: 0;
+    font-size: 13px;
+    color: #6b7280;
+    line-height: 1.4;
+}

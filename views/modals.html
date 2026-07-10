@@ -1,0 +1,158 @@
+<div id="modal-update" class="modal-overlay">
+    <div class="modal-box" style="width: 450px; text-align: left;">
+        <h3 style="margin-top: 0; color: #111827;">Update PICA Progress</h3>
+        <p class="subtitle" style="margin-bottom: 15px;">Update corrective actions and status.</p>
+        <input type="hidden" id="update-id">
+        
+        <label style="font-size: 13px; font-weight: 500; color: #4b5563;">Current Status:</label>
+        <select id="update-status" style="margin-top: 4px;">
+            <option value="Open">Open</option>
+            <option value="Progress">In Progress</option>
+            <option value="Closed">Closed (Resolved)</option>
+        </select>
+
+        <div class="form-group" style="margin-top: 10px;">
+            <label>Forward Task to Other PIC (Optional)</label>
+            <select id="update-pic">
+                <option value="">-- Tetap kerjakan sendiri --</option>
+            </select>
+        </div>
+
+        <label style="font-size: 13px; font-weight: 500; color: #4b5563;">Corrective Action:</label>
+        <textarea id="update-action" placeholder="Actions that have been taken..." rows="3" style="margin-top: 4px;"></textarea>
+        
+        <label style="font-size: 13px; font-weight: 500; color: #4b5563;">Remark / Additional Notes:</label>
+        <textarea id="update-remark" placeholder="Additional details or constraints..." rows="2" style="margin-top: 4px;"></textarea>
+
+        <div class="form-group" style="margin-top: 16px;">
+            <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Upload Documentation (Optional)</label>
+            
+            <div class="file-upload-wrapper" id="upload-wrapper" style="min-height: 130px; position: relative; padding: 16px; box-sizing: border-box;">
+                
+                <div id="upload-content-default" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; pointer-events: none;">
+                    <div class="file-upload-icon" id="upload-icon" style="font-size: 32px; margin-bottom: 8px;">📁</div>
+                    <div class="file-upload-text" id="upload-text" style="color: #6b7280; font-size: 14px;">Click to browse or drag files here</div>
+                </div>
+
+                <div id="upload-preview-container" style="display: none; flex-wrap: wrap; gap: 12px; width: 100%; justify-content: center; z-index: 1;">
+                    </div>
+                
+                <input type="file" id="update-evidence" multiple accept="image/*, application/pdf" onchange="updateFileNameDisplay(this)" style="position: absolute; width: 100%; height: 100%; opacity: 0; cursor: pointer; top: 0; left: 0; z-index: 2; margin: 0;">
+            </div>
+            <div style="font-size: 11px; color: #9ca3af; margin-top: 6px;">* Supported formats: JPG, PNG, PDF (Max 5MB).</div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button onclick="submitUpdate()">Save Changes</button>
+            <button class="btn-secondary" onclick="closeUpdateModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="custom-alert" class="toast-alert">
+    <div class="toast-icon" id="alert-icon">✓</div>
+    <div class="toast-content">
+        <h3 id="alert-title">Notification</h3>
+        <p id="alert-message">Message goes here</p>
+    </div>
+</div>
+
+<div id="modal-priority" class="modal-overlay">
+    <div class="modal-box" style="width: 350px; text-align: left;">
+        <h3 style="margin-top: 0; color: #111827;">Change Priority</h3>
+        <p class="subtitle" style="margin-bottom: 15px;">Set the priority scale for handling this issue.</p>
+        <input type="hidden" id="prio-issue-id">
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Select Priority:</label>
+        <select id="prio-select" style="margin-top: 6px;">
+            <option value="Pending">Pending</option>
+            <option value="Prio 1">Priority 1 (Urgent)</option>
+            <option value="Prio 2">Priority 2 (Medium)</option>
+            <option value="Prio 3">Priority 3 (Low)</option>
+        </select>
+        <div style="display: flex; gap: 10px; margin-top: 24px;">
+            <button onclick="submitPriority()">Save Priority</button>
+            <button class="btn-secondary" onclick="closePriorityModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="custom-confirm" class="modal-overlay">
+    <div class="modal-box" style="width: 380px;">
+        <h3 id="confirm-title" style="margin-top: 0; color: #111827;">Confirmation</h3>
+        <p id="confirm-message" style="color: #6b7280; margin-bottom: 24px; font-size: 14px; line-height: 1.5; white-space: pre-wrap;">Confirmation message here</p>
+        <div style="display: flex; gap: 10px; justify-content: center;">
+            <button id="btn-confirm-yes" class="btn-danger">Yes, Continue</button>
+            <button class="btn-secondary" onclick="closeCustomConfirm()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-edit-user" class="modal-overlay">
+    <div class="modal-box" style="width: 400px; text-align: left;">
+        <h3 style="margin-top: 0; color: #111827;">Edit User Account</h3>
+        <p class="subtitle" style="margin-bottom: 15px;">Change the data and access role for this user.</p>
+        <input type="hidden" id="edit-user-id">
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Username:</label>
+        <input type="text" id="edit-user-username" style="margin-top: 4px; margin-bottom: 12px;" autocomplete="off">
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Access Role:</label>
+        <select id="edit-user-role" style="margin-top: 4px; margin-bottom: 12px;">
+            <option value="User">Regular User</option>
+            <option value="Dept Head">Dept Head / PIC</option>
+            <option value="MD">Management / MD</option>
+            <option value="KTT">KTT</option>
+        </select>
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Department (PIC Only):</label>
+        <select id="edit-user-dept" style="margin-top: 4px; margin-bottom: 12px;">
+            <option value="">-- Set Department --</option>
+        </select>
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button onclick="submitEditUser()">Save Changes</button>
+            <button class="btn-secondary" onclick="closeEditUserModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-edit-dept" class="modal-overlay">
+    <div class="modal-box" style="width: 350px; text-align: left;">
+        <h3 style="margin-top: 0; color: #111827;">Edit Department</h3>
+        <p class="subtitle" style="margin-bottom: 15px;">Change the name of this department.</p>
+        <input type="hidden" id="edit-dept-id">
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">New Department Name:</label>
+        <input type="text" id="edit-dept-name" style="margin-top: 6px;" autocomplete="off">
+        <div style="display: flex; gap: 10px; margin-top: 24px;">
+            <button onclick="submitEditDepartment()">Save Changes</button>
+            <button class="btn-secondary" onclick="closeEditDeptModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-due-date" class="modal-overlay">
+    <div class="modal-box" style="width: 350px; text-align: left;">
+        <h3 style="margin-top: 0; color: #111827;">Change Due Date</h3>
+        <p class="subtitle" style="margin-bottom: 15px;">Set a new target completion date for this issue.</p>
+        
+        <input type="hidden" id="due-date-issue-id">
+        
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">New Target Due Date:</label>
+        <input type="date" id="due-date-input" style="margin-top: 6px; width: 100%; border: 1px solid #d1d5db; padding: 8px; border-radius: 6px;">
+        
+        <div style="display: flex; gap: 10px; margin-top: 24px;">
+            <button onclick="submitDueDate()">Save Changes</button>
+            <button class="btn-secondary" onclick="closeDueDateModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-attachment" class="modal-overlay">
+    <div class="modal-box" style="width: 85%; max-width: 900px; height: 85vh; display: flex; flex-direction: column; padding: 20px;">
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 12px;">
+            <h3 style="margin: 0; font-size: 18px; color: #111827;">Attachment Viewer</h3>
+            <button class="btn-secondary btn-sm" onclick="closeAttachmentModal()" style="border: none; font-size: 24px; padding: 0 8px; margin: 0; line-height: 1; background: transparent; cursor: pointer; color: #6b7280;">&times;</button>
+        </div>
+        
+        <div id="attachment-content" style="flex: 1; overflow: hidden; display: flex; justify-content: center; align-items: center; background: #f3f4f6; border-radius: 8px; border: 1px inset #e5e7eb;">
+            </div>
+
+    </div>
+</div>

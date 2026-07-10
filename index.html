@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PICA DASHBOARD SYSTEM</title>
+    <link rel="stylesheet" href="public/css/style.css">
+</head>
+<body>
+    <header id="global-nav" style="display: none; height: 50px;">
+        <div class="header-brand">
+            <img src="public/img/logo_pica.png" alt="Logo" class="brand-logo">
+            <!-- <div class="header-title" style="display: flex; align-items: center; gap: 10px; width: 400px;">
+                PICA System
+            </div> -->
+        </div>
+        <div class="header-info">
+            <div style="align-items: center; gap: 16px; border-left: 1px solid #e5e7eb; padding-left: 24px;">
+                <span id="user-badge" style="font-weight: 500;">Role: -</span>  
+                <button class="logout-btn" onclick="handleLogout()">Logout</button>
+                <button class="btn-sm" style="background-color: #ef4444; color: white; border: none;" onclick="handleExitApp()">Exit App</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-content" id="app-content">
+        </div>
+
+    <footer style="display: flex; justify-content: center;">
+        <div style="text-align: center;">PICA System v1.0.0</div>
+    </footer>
+
+    <div id="modals-container"></div>
+
+    <!-- ========================================== -->
+    <!-- MODAL MANUAL INPUT MINUTES OF MEETING (MD) -->
+    <!-- ========================================== -->
+    <div id="modal-mom-export" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 9999; align-items: center; justify-content: center;">
+        
+        <div class="modal-content" style="max-width: 750px; width: 95%; background: #ffffff; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; max-height: 85vh; overflow: hidden;">
+            
+            <div style="padding: 20px 24px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #f9fafb;">
+                <div>
+                    <h2 style="margin: 0; color: #111827; font-size: 1.25rem; font-weight: 600;">Minutes of Meeting Form</h2>
+                    <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 0.85rem;">Please complete the meeting details before exporting the PDF report.</p>
+                </div>
+                <button onclick="closeMOMModal()" style="background: none; border: none; font-size: 1.5rem; color: #9ca3af; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#9ca3af'">&times;</button>
+            </div>
+            
+            <div style="padding: 24px; overflow-y: auto; flex-grow: 1; transform: translateZ(0); will-change: transform;">
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Note Taker</label>
+                            <input type="text" id="mom-notulen" placeholder="Example: P. Ikhsan" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; outline: none;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Chairman</label>
+                            <input type="text" id="mom-chairman" placeholder="Example: P. Putu" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; outline: none;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Date</label>
+                            <input type="date" id="mom-date" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; outline: none;">
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Time</label>
+                            <input type="text" id="mom-time" placeholder="Example: 13:30 - 15:30" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; outline: none;">
+                        </div>
+                        <div>
+                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Location</label>
+                            <input type="text" id="mom-location" placeholder="Example: Site office Molore" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; outline: none;">
+                        </div>
+                    </div>
+                </div>
+                
+                <h3 style="margin: 0 0 16px 0; font-size: 1rem; font-weight: 600; color: #1f2937; border-bottom: 2px solid #f3f4f6; padding-bottom: 8px;">Attendance List (Max. 21 Participants)</h3>
+                
+                <div id="mom-participants-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+                    </div>
+                
+            </div>
+            
+            <div style="padding: 16px 24px; border-top: 1px solid #e5e7eb; background: #f9fafb; display: flex; justify-content: flex-end; gap: 12px;">
+                <button class="btn-secondary" onclick="closeMOMModal()" style="padding: 8px 20px; border-radius: 6px; border: 1px solid #d1d5db; background: white; color: #374151; cursor: pointer; font-weight: 600;">Cancel</button>
+                <button class="btn-primary" onclick="submitMOMExport()" style="padding: 8px 20px; border-radius: 6px; border: none; background: #10b981; color: white; cursor: pointer; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">Generate PDF</button>
+            </div>
+            
+        </div>
+    </div>
+
+    <script src="./node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+    <script>
+        window.jsPDF = window.jspdf.jsPDF;
+    </script>
+    <script src="./node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.min.js"></script>
+
+    <script type="module" src="./js/app.js"></script>
+    <script>
+        // Memastikan tombol back browser desktop berjalan dengan Role Navigation
+        const originalNavigate = window.navigateToRole;
+        window.navigateToRole = function(role) {
+            if(originalNavigate) originalNavigate(role);
+            document.getElementById('global-nav').style.display = 'flex';
+            document.getElementById('user-badge').innerText = role;
+        };
+    </script>
+</body>
+</html>

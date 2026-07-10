@@ -1,0 +1,33 @@
+{
+  "name": "pica-system",
+  "version": "1.2.0",
+  "description": "Aplikasi PICA Dashboard",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "electron": "^42.3.3",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8"
+  },
+  "build": {
+    "appId": "com.pica.system",
+    "productName": "Pica System",
+
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/img/icon_pica.png"
+    }
+  }
+}
