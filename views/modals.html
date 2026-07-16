@@ -105,6 +105,9 @@
         <select id="edit-user-dept" style="margin-top: 4px; margin-bottom: 12px;">
             <option value="">-- Set Department --</option>
         </select>
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">New Password:</label>
+        <input type="password" id="edit-user-password" placeholder="Leave blank to keep current password" style="margin-top: 4px; margin-bottom: 4px;" autocomplete="new-password">
+        <div style="font-size: 11px; color: #9ca3af; margin-bottom: 12px;">* Only fill this in if you want to reset the password.</div>
         <div style="display: flex; gap: 10px; margin-top: 20px;">
             <button onclick="submitEditUser()">Save Changes</button>
             <button class="btn-secondary" onclick="closeEditUserModal()">Cancel</button>
@@ -139,6 +142,67 @@
         <div style="display: flex; gap: 10px; margin-top: 24px;">
             <button onclick="submitDueDate()">Save Changes</button>
             <button class="btn-secondary" onclick="closeDueDateModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-import-excel" class="modal-overlay">
+    <div class="modal-box" style="width: 720px; max-width: 95vw; text-align: left; max-height: 88vh; display: flex; flex-direction: column;">
+        <h3 style="margin-top: 0; color: #111827;">Import Issues from Excel</h3>
+        <p class="subtitle" style="margin-bottom: 12px;">Upload an .xlsx/.xls/.csv file following the expected column layout: Case/Notification, Date Issue, Issued, Corrective Action, PIC, Due Date, Stat, Remark, SKALA. The "Issued" and "PIC" columns are kept as reference notes only — Issued By, PIC, and Department will all default to MD.</p>
+
+        <div style="margin-bottom: 8px;">
+            <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Excel File:</label>
+            <input type="file" id="import-file-input" accept=".xlsx,.xls,.csv" onchange="handleImportFileSelect(this)" style="margin-top: 4px; width: 100%; max-width: 400px; box-sizing: border-box; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px;">
+        </div>
+
+        <div id="import-pic-info" style="font-size: 12.5px; margin-bottom: 14px; line-height: 1.5; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px 10px;"></div>
+
+        <button type="button" class="btn-secondary btn-sm" style="margin: 0 0 14px 0; width: fit-content;" onclick="downloadImportTemplate()">⬇ Download Excel Template</button>
+
+        <div id="import-preview-wrap" style="display: none; flex: 1; overflow: hidden; flex-direction: column;">
+            <div id="import-summary" style="font-size: 12.5px; color: #4b5563; margin-bottom: 8px; line-height: 1.5;"></div>
+            <div class="table-container" style="max-height: 320px;">
+                <table style="min-width: 480px;">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px; text-align:center;">No</th>
+                            <th>Case/Notification</th>
+                            <th style="width: 100px;">Due Date</th>
+                            <th style="width: 90px; text-align:center;">Status</th>
+                            <th style="width: 90px; text-align:center;">Scale</th>
+                        </tr>
+                    </thead>
+                    <tbody id="import-preview-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center; margin-top: 16px;">
+            <button id="btn-import-submit" onclick="submitImportRows()" disabled>Import Now</button>
+            <button class="btn-secondary" onclick="closeImportModal()">Cancel</button>
+            <span id="import-progress" style="font-size: 12px; color: #6b7280; font-weight: 600;"></span>
+        </div>
+    </div>
+</div>
+
+<div id="modal-edit-assignment" class="modal-overlay">
+    <div class="modal-box" style="width: 400px; text-align: left;">
+        <h3 style="margin-top: 0; color: #111827;">Edit Assignment</h3>
+        <p class="subtitle" style="margin-bottom: 15px;">Correct who reported (Issued By) and/or who is responsible (PIC) for this issue — for example after an Excel import that could not be automatically matched.</p>
+        <input type="hidden" id="edit-assignment-issue-id">
+
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Issued By:</label>
+        <select id="edit-assignment-issuer-select" style="margin-top: 6px; margin-bottom: 14px;"></select>
+
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">PIC:</label>
+        <select id="edit-assignment-pic-select" style="margin-top: 6px;">
+            <option value="">-- Unassigned --</option>
+        </select>
+
+        <div style="display: flex; gap: 10px; margin-top: 24px;">
+            <button onclick="submitEditAssignment()">Save Changes</button>
+            <button class="btn-secondary" onclick="closeEditAssignmentModal()">Cancel</button>
         </div>
     </div>
 </div>

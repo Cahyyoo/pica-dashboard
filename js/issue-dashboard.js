@@ -245,6 +245,13 @@ function renderMDTable() {
         const picUser = state.globalUsers.find(u => String(u.id) === String(item.picId));
         const picName = picUser ? picUser.username : 'Unassigned';
 
+        let issuerDisplay = issuerName;
+        let picDisplay = picName;
+        if (role === 'MD') {
+            issuerDisplay = `<span style="cursor:pointer; border-bottom: 1px dashed #1591DC;" onclick="openEditAssignmentModal(${item.id}, ${item.picId || 'null'}, ${item.issuedBy || 'null'})" title="Edit Assignment">${issuerName} ✏️</span>`;
+            picDisplay = `<span style="cursor:pointer; color:#0ea5e9; border-bottom: 1px dashed #0ea5e9;" onclick="openEditAssignmentModal(${item.id}, ${item.picId || 'null'}, ${item.issuedBy || 'null'})" title="Edit Assignment">${picName} ✏️</span>`;
+        }
+
         let prioBadge = `<span class="badge badge-prio">${item.priority}</span>`;
         if (role === 'MD') {
             prioBadge = `<span class="badge badge-prio" style="cursor:pointer; border:1px dashed #d97706;" onclick="openPriorityModal(${item.id}, '${item.priority}')" title="Change Priority">${item.priority}</span>`;
@@ -253,10 +260,10 @@ function renderMDTable() {
         rowsHTML += `<tr>
             <td style="text-align: center;">${startIndex + index + 1}</td>
             <td>${item.caseNotification}</td>
-            <td style="font-weight: 500; color: #1591DC;">${issuerName}</td>
+            <td style="font-weight: 500; color: #1591DC;">${issuerDisplay}</td>
             <td>${dateStr}</td>
             <td>${dueDateDisplay}</td>
-            <td style="font-weight: 500;">${picName}</td>
+            <td style="font-weight: 500;">${picDisplay}</td>
             <td style="text-align: center;">${getStatusBadge(item.status)}</td>
             <td style="text-align: center;">${prioBadge}</td>
             <td style="text-align: center;">${getDailyUpdateBadge(item)}</td>

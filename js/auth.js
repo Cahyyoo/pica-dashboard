@@ -157,6 +157,7 @@ export function openEditUserModal(id, username, role, dept) {
     document.getElementById('edit-user-username').value = username;
     document.getElementById('edit-user-role').value = role;
     document.getElementById('edit-user-dept').value = dept || '';
+    document.getElementById('edit-user-password').value = '';
     document.getElementById('modal-edit-user').classList.add('show');
 }
 
@@ -169,23 +170,28 @@ export async function submitEditUser() {
     const username = document.getElementById('edit-user-username').value;
     const role = document.getElementById('edit-user-role').value;
     const dept = document.getElementById('edit-user-dept').value;
+    const password = document.getElementById('edit-user-password').value;
 
     if (!username || !role) return showCustomAlert("Warning", "Username and Role are required!");
     if (role === 'Dept Head' && !dept) return showCustomAlert("Warning", "Dept Head must have a department!");
 
+    const payload = { username, role, department: dept || null };
+    if (password) payload.password = password;
+
     try {
         document.querySelector('button[onclick="submitEditUser()"]').innerText = "Saving...";
-        
+
         const response = await fetch(`${API_URL}/auth/users/${id}`, {
             method: 'PATCH',
             headers: getAuthHeaders(),
-            body: JSON.stringify({ username, role, department: dept || null })
+            body: JSON.stringify(payload)
         });
 
         document.querySelector('button[onclick="submitEditUser()"]').innerText = "Save Changes";
 
         if (response.ok) {
             closeEditUserModal();
+            document.getElementById('edit-user-password').value = '';
             showCustomAlert("Success", `Account data for ${username} updated successfully!`);
             loadAdminUsers(); // Muat ulang tabel
         } else {

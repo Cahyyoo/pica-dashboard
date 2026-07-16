@@ -1,14 +1,32 @@
 const { app, BrowserWindow, ipcMain, dialog, powerMonitor } = require('electron'); // 'globalShortcut' dan 'exec' dihapus
+const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
 const path = require('path');
-const fs = require('fs'); 
+const fs = require('fs');
 const http = require('http');
 
-let isDialogOpen = false; 
-let isQuitting = false; 
-let mainWindow; 
+log.transports.file.level = 'info';
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
+log.info('--- Aplikasi PICA Dinyalakan ---');
+
+let isDialogOpen = false;
+let isQuitting = false;
+let mainWindow;
 
 // --- CEK APAKAH APLIKASI DIJALANKAN DARI AUTO-START (SILUMAN) ---
 const isHiddenStart = process.argv.includes('--hidden');
+
+// Ubah error teknis fs.writeFileSync jadi pesan yang jelas & actionable untuk user awam
+function friendlySaveError(error) {
+  if (error && error.code === 'EBUSY') {
+    return 'This file is currently open in another program (e.g. Excel). Please close it first, then try saving again — or choose a different file name.';
+  }
+  if (error && (error.code === 'EPERM' || error.code === 'EACCES')) {
+    return 'Permission denied while saving the file. Try choosing a different folder.';
+  }
+  return error && error.message ? error.message : String(error);
+}
 
 function createWindow () {
   // 1. SPLASH SCREEN
@@ -113,13 +131,88 @@ function createWindow () {
       }
       return { success: false, canceled: true };
     } catch (error) {
-      return { success: false, error: error.message };
+      return { success: false, error: friendlySaveError(error) };
     } finally {
-      isDialogOpen = false; 
-      if (mainWindow.isVisible()) mainWindow.focus();          
+      isDialogOpen = false;
+      if (mainWindow.isVisible()) mainWindow.focus();
+    }
+  });
+
+  // Jembatan Simpan File Generik (dipakai untuk Excel Template, dsb - bukan PDF)
+  ipcMain.handle('simpan-file', async (event, base64Data, defaultFilename, options = {}) => {
+    isDialogOpen = true;
+    try {
+      const { filePath } = await dialog.showSaveDialog(mainWindow, {
+        title: options.title || 'Save File',
+        defaultPath: defaultFilename,
+        filters: options.filters || [{ name: 'All Files', extensions: ['*'] }]
+      });
+
+      if (filePath) {
+        const base64 = base64Data.split(';base64,').pop();
+        fs.writeFileSync(filePath, base64, { encoding: 'base64' });
+        return { success: true };
+      }
+      return { success: false, canceled: true };
+    } catch (error) {
+      return { success: false, error: friendlySaveError(error) };
+    } finally {
+      isDialogOpen = false;
+      if (mainWindow.isVisible()) mainWindow.focus();
     }
   });
 }
+
+// =========================================================
+// AUTO UPDATE: CEK & INSTALL VERSI TERBARU DARI GITHUB
+// =========================================================
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+
+function setupAutoUpdater() {
+  // 1. Sinyal saat update ditemukan & mulai diunduh
+  autoUpdater.on('update-available', (info) => {
+    log.info(`Update tersedia: v${info.version}. Mengunduh di latar belakang...`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('update-mulai-download');
+    }
+  });
+
+  // 2. Sinyal progress unduhan (Real-time)
+  autoUpdater.on('download-progress', (progressObj) => {
+    let persentase = Math.floor(progressObj.percent);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setProgressBar(persentase / 100); // Progress hijau di Taskbar Windows
+        mainWindow.webContents.send('update-progress-berjalan', persentase);
+    }
+  });
+
+  // 3. Sinyal unduhan 100% selesai
+  autoUpdater.on('update-downloaded', (info) => {
+    log.info(`Update v${info.version} siap diinstal.`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setProgressBar(-1); // Hapus progress bar dari Taskbar
+        mainWindow.webContents.send('update-siap-dipasang', info.version);
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    log.error('Error Updater:', err == null ? 'unknown' : (err.stack || err.message));
+  });
+
+  // Pengecekan saat startup & berkala tiap 4 jam
+  autoUpdater.checkForUpdates().catch((err) => log.error(err));
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch((err) => log.error(err));
+  }, 4 * 60 * 60 * 1000);
+}
+
+// 4. PENERIMA PERINTAH DARI TOMBOL UI (Letakkan di luar fungsi setupAutoUpdater)
+ipcMain.on('eksekusi-update-sekarang', () => {
+  log.info('Perintah restart diterima dari Frontend. Mengeksekusi instalasi...');
+  isQuitting = true; 
+  autoUpdater.quitAndInstall(); 
+});
 
 // =========================================================
 // PENGENDALI KELUAR: MATIKAN APLIKASI SEPENUHNYA
@@ -180,7 +273,10 @@ if (!gotTheLock) {
       args: [] 
     });
 
-    // 2. CEK KONEKSI PERTAMA KALI SAAT LAPTOP MENYALA
+    // 2. MULAI PENGECEKAN UPDATE OTOMATIS DARI GITHUB RELEASES
+    if (app.isPackaged) setupAutoUpdater();
+
+    // 3. CEK KONEKSI PERTAMA KALI SAAT LAPTOP MENYALA
     const isConnectedToOffice = await checkServerConnection();
 
     if (isConnectedToOffice) {

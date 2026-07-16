@@ -1,15 +1,19 @@
 import { showView, showCustomAlert, closeCustomAlert, navigateToRole, loadComponent, showCustomConfirm, closeCustomConfirm } from './utils.js';
 import { handleLogin, handleLogout, handleExitApp, loadAdminUsers, submitNewUser, deleteUser, openEditUserModal, closeEditUserModal, submitEditUser } from './auth.js';
-import { 
-    loadDepartments, submitIssue, loadDashboardMD, loadDashboardPIC, 
-    openDetailView, backFromDetail, openUpdateFromDetail, closeUpdateModal, 
+import {
+    loadDepartments, submitIssue, loadDashboardMD, loadDashboardPIC,
+    openDetailView, backFromDetail, openUpdateFromDetail, closeUpdateModal,
     submitUpdate, openPriorityModal, closePriorityModal, submitPriority, refreshDashboardMD, refreshDashboardPIC, applyFilterMD, changeMDPage, changeMDPageSize, filterUserHistory, filterPICHistory, openUserHistory, refreshUserHistory, exportSingleIssueToPDF, exportFilteredIssuesToPDF,
-    openDueDateModal, closeDueDateModal, submitDueDate, checkDailyUpdates, openAttachmentModal, closeAttachmentModal, updateFileNameDisplay, openMOMModal, submitMOMExport, closeMOMModal, loadMOMArchives, viewMOMDetail, refreshMOMArchives, closeMOMDetail, downloadMOMArchive
+    openDueDateModal, closeDueDateModal, submitDueDate, checkDailyUpdates, openAttachmentModal, closeAttachmentModal, updateFileNameDisplay, openMOMModal, submitMOMExport, closeMOMModal, loadMOMArchives, viewMOMDetail, refreshMOMArchives, closeMOMDetail, downloadMOMArchive,
+    openEditAssignmentModal, closeEditAssignmentModal, submitEditAssignment
 } from './issues.js';
-import { 
+import {
     loadAdminDepartments, submitNewDepartment, deleteDepartment,
     openEditDeptModal, closeEditDeptModal, submitEditDepartment
 } from './departements.js';
+import {
+    openImportModal, closeImportModal, downloadImportTemplate, handleImportFileSelect, submitImportRows
+} from './issue-import.js';
 
 // 1. Daftarkan fungsi ke objek window agar bisa dieksekusi atribut onclick="" di HTML
 window.showView = (viewId) => {
@@ -72,6 +76,16 @@ window.exportFilteredIssuesToPDF = exportFilteredIssuesToPDF;
 window.openDueDateModal = openDueDateModal;
 window.closeDueDateModal = closeDueDateModal;
 window.submitDueDate = submitDueDate;
+
+window.openEditAssignmentModal = openEditAssignmentModal;
+window.closeEditAssignmentModal = closeEditAssignmentModal;
+window.submitEditAssignment = submitEditAssignment;
+
+window.openImportModal = openImportModal;
+window.closeImportModal = closeImportModal;
+window.downloadImportTemplate = downloadImportTemplate;
+window.handleImportFileSelect = handleImportFileSelect;
+window.submitImportRows = submitImportRows;
 
 window.openAttachmentModal = openAttachmentModal;
 window.closeAttachmentModal = closeAttachmentModal;
@@ -218,4 +232,41 @@ try {
     });
 } catch (error) {
     console.warn("Sensor Wake-Up hanya berjalan di environment Electron.");
+}
+
+// =========================================================
+// FITUR AUTO-UPDATER: PENDENGAR SINYAL DARI MAIN.JS
+// =========================================================
+try {
+    const { ipcRenderer } = window.require('electron');
+
+    // 1. Munculkan layar gelap saat download dimulai
+    ipcRenderer.on('update-mulai-download', () => {
+        document.getElementById('update-overlay').style.display = 'flex';
+    });
+
+    // 2. Gerakkan progress bar hijau
+    ipcRenderer.on('update-progress-berjalan', (event, persentase) => {
+        document.getElementById('progress-bar').style.width = persentase + '%';
+        document.getElementById('progress-text').innerText = persentase + '%';
+    });
+
+    // 3. Ubah teks dan munculkan tombol saat selesai
+    ipcRenderer.on('update-siap-dipasang', (event, version) => {
+        document.getElementById('update-title').innerText = "Unduhan Selesai!";
+        document.getElementById('progress-text').innerText = `Versi ${version} siap dipasang.`;
+        
+        const btnRestart = document.getElementById('btn-restart-update');
+        btnRestart.style.display = 'block';
+        
+        // 4. Kirim perintah maut untuk menutup aplikasi jika tombol diklik!
+        btnRestart.addEventListener('click', () => {
+            btnRestart.innerText = "Mengeksekusi...";
+            btnRestart.disabled = true;
+            ipcRenderer.send('eksekusi-update-sekarang'); 
+        });
+    });
+
+} catch (error) {
+    console.warn("Fitur IPC Auto-Updater hanya berjalan di dalam Electron.");
 }

@@ -1,11 +1,11 @@
 {
   "name": "pica-system",
-  "version": "1.2.0",
+  "version": "1.10.0",
   "description": "Aplikasi PICA Dashboard",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder"
+    "build": "electron-builder --publish always"
   },
   "keywords": [],
   "author": "",
@@ -16,18 +16,31 @@
     "electron-builder": "^26.15.3"
   },
   "dependencies": {
+    "electron-log": "^5.4.4",
+    "electron-updater": "^6.8.9",
     "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.8"
+    "jspdf-autotable": "^5.0.8",
+    "xlsx": "^0.18.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Cahyyoo/pica-dashboard.git"
   },
   "build": {
     "appId": "com.pica.system",
     "productName": "Pica System",
-
     "win": {
       "target": [
         "nsis"
       ],
       "icon": "public/img/icon_pica.png"
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Cahyyoo",
+        "repo": "pica-dashboard"
+      }
+    ]
   }
 }

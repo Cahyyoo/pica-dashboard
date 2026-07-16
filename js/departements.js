@@ -96,11 +96,11 @@ export function deleteDepartment(id, name) {
 export function openEditDeptModal(id, currentName) {
     document.getElementById('edit-dept-id').value = id;
     document.getElementById('edit-dept-name').value = currentName;
-    document.getElementById('modal-edit-dept').style.display = 'flex';
+    document.getElementById('modal-edit-dept').classList.add('show');
 }
 
 export function closeEditDeptModal() {
-    document.getElementById('modal-edit-dept').style.display = 'none';
+    document.getElementById('modal-edit-dept').classList.remove('show');
 }
 
 export async function submitEditDepartment() {

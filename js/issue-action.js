@@ -33,17 +33,18 @@ export async function submitIssue() {
 
 export function openUpdateFromDetail() {
     const issue = state.globalIssues.find(i => i.id === state.currentDetailId);
-    
-    if (issue) {
-        // BLOKIR: Hentikan proses jika statusnya sudah Closed
-        if (issue.status === 'Closed') {
-            showCustomAlert("Access Denied", "This issue has been closed and can no longer be updated.");
-            return; // Perintah 'return' akan menghentikan eksekusi kode ke bawah
-        }
-        
-        // Jika statusnya belum Closed, lanjutkan buka modal
-        openUpdateModal(issue); 
+    if (!issue) return;
+
+    const role = localStorage.getItem('user_role');
+
+    // BLOKIR: Dept Head tidak bisa mengubah issue yang sudah Closed.
+    // MD tetap diizinkan agar bisa membetulkan data (mis. hasil Import Excel yang keliru).
+    if (issue.status === 'Closed' && role !== 'MD') {
+        showCustomAlert("Access Denied", "This issue has been closed and can no longer be updated.");
+        return;
     }
+
+    openUpdateModal(issue);
 }
 
 export function openUpdateModal(issue) {
@@ -248,7 +249,91 @@ export async function submitDueDate() {
         } else {
             showCustomAlert("Failed", "An error occurred while updating the due date.");
         }
-    } catch (error) { 
-        showCustomAlert("Error", "Server error."); 
+    } catch (error) {
+        showCustomAlert("Error", "Server error.");
+    }
+}
+
+// =========================================================
+// FITUR EDIT ASSIGNMENT (KHUSUS MD) - MEMPERBAIKI ISSUED BY & PIC YANG SALAH
+// Dipakai antara lain untuk membetulkan hasil Import Excel
+// yang gagal dicocokkan otomatis dengan user sistem.
+// =========================================================
+export function openEditAssignmentModal(id, currentPicId, currentIssuedBy) {
+    document.getElementById('edit-assignment-issue-id').value = id;
+
+    const issuerSelect = document.getElementById('edit-assignment-issuer-select');
+    if (issuerSelect) {
+        let options = '';
+        state.globalUsers.forEach(u => {
+            const roleName = (typeof u.role === 'object' && u.role !== null) ? u.role.name : u.role;
+            options += `<option value="${u.id}">${u.username} (${roleName})</option>`;
+        });
+        issuerSelect.innerHTML = options;
+        issuerSelect.value = currentIssuedBy ? String(currentIssuedBy) : '';
+    }
+
+    const picSelect = document.getElementById('edit-assignment-pic-select');
+    if (picSelect) {
+        let options = '<option value="">-- Unassigned --</option>';
+        state.globalUsers.forEach(u => {
+            const roleName = (typeof u.role === 'object' && u.role !== null) ? u.role.name : u.role;
+            if (roleName === 'Dept Head') {
+                const deptName = u.department || 'Unknown Dept';
+                options += `<option value="${u.id}">${u.username} (${deptName})</option>`;
+            }
+        });
+        picSelect.innerHTML = options;
+        picSelect.value = currentPicId ? String(currentPicId) : '';
+    }
+
+    document.getElementById('modal-edit-assignment').classList.add('show');
+}
+
+export function closeEditAssignmentModal() {
+    document.getElementById('modal-edit-assignment').classList.remove('show');
+}
+
+export async function submitEditAssignment() {
+    const id = document.getElementById('edit-assignment-issue-id').value;
+    const issuerSelect = document.getElementById('edit-assignment-issuer-select');
+    const picSelect = document.getElementById('edit-assignment-pic-select');
+
+    const issuedBy = issuerSelect.value;
+    const picId = picSelect.value;
+
+    if (!issuedBy) return showCustomAlert("Warning", "Issued By cannot be empty!");
+
+    const issuerLabel = issuerSelect.options[issuerSelect.selectedIndex].text;
+    const picLabel = picId ? picSelect.options[picSelect.selectedIndex].text : 'Unassigned';
+
+    const issue = state.globalIssues.find(i => String(i.id) === String(id));
+    const currentStatus = issue ? issue.status : 'Open';
+
+    const formData = new FormData();
+    formData.append('status', currentStatus);
+    formData.append('correctiveAction', '');
+    formData.append('remark', `[✏️ Assignment corrected manually by MD — Issued By: ${issuerLabel}, PIC: ${picLabel}]`);
+    formData.append('issuedBy', issuedBy);
+    if (picId) formData.append('picId', picId);
+
+    const headers = getAuthHeaders();
+    delete headers['Content-Type'];
+
+    try {
+        const response = await fetch(`${API_URL}/issue/update/${id}`, {
+            method: 'PATCH', headers, body: formData
+        });
+
+        if (response.ok) {
+            closeEditAssignmentModal();
+            showCustomAlert("Success", "Assignment updated successfully!");
+            await loadDashboardMD();
+            if (document.getElementById('view-issue-detail').classList.contains('active')) openDetailView(Number(id));
+        } else {
+            showCustomAlert("Failed", "An error occurred while updating the assignment.");
+        }
+    } catch (error) {
+        showCustomAlert("Error", "Server error.");
     }
 }

@@ -35,10 +35,16 @@ export function openDetailView(id) {
         const issuerUser = state.globalUsers.find(u => String(u.id) === String(issue.issuedBy));
         issuerName = issuerUser ? issuerUser.username : `ID: ${issue.issuedBy}`;
     }
+    const role = localStorage.getItem('user_role');
     const elIssuer = document.getElementById('detail-issuer');
-    if (elIssuer) elIssuer.innerText = issuerName;
+    if (elIssuer) {
+        if (role === 'MD') {
+            elIssuer.innerHTML = `<span style="cursor:pointer; border-bottom: 1px dashed #1591DC;" onclick="openEditAssignmentModal(${issue.id}, ${issue.picId || 'null'}, ${issue.issuedBy || 'null'})" title="Edit Assignment">${issuerName} ✏️</span>`;
+        } else {
+            elIssuer.innerText = issuerName;
+        }
+    }
 
-    const role = localStorage.getItem('user_role'); 
     const elDueDate = document.getElementById('detail-due-date');
     if (elDueDate) {
         const dueDateText = issue.dueDate ? new Date(issue.dueDate).toLocaleDateString('en-GB') : '-';
@@ -51,9 +57,15 @@ export function openDetailView(id) {
 
     const picUser = state.globalUsers.find(u => String(u.id) === String(issue.picId));
     const picName = picUser ? picUser.username : 'Unassigned';
-    
+
     const elPic = document.getElementById('detail-pic');
-    if (elPic) elPic.innerText = picName;
+    if (elPic) {
+        if (role === 'MD') {
+            elPic.innerHTML = `<span style="cursor:pointer; color:#0ea5e9; border-bottom: 1px dashed #0ea5e9;" onclick="openEditAssignmentModal(${issue.id}, ${issue.picId || 'null'}, ${issue.issuedBy || 'null'})" title="Edit Assignment">${picName} ✏️</span>`;
+        } else {
+            elPic.innerText = picName;
+        }
+    }
 
     document.getElementById('detail-desc').innerText = issue.description || '-';
     document.getElementById('detail-status').innerHTML = getStatusBadge(issue.status);
@@ -61,12 +73,14 @@ export function openDetailView(id) {
 
     const currentUserId = Number(localStorage.getItem('user_id'));
 
-    // MD dapat mengupdate SELURUH progres PICA (kecuali yang sudah Closed).
-    // Dept Head hanya dapat mengupdate task yang menjadi tanggung jawabnya (PIC saat ini).
+    // MD dapat mengupdate/memperbaiki SELURUH progres PICA, termasuk yang sudah Closed
+    // (dibutuhkan untuk membetulkan data hasil Import Excel yang keliru).
+    // Dept Head hanya dapat mengupdate task miliknya sendiri dan tidak bisa jika sudah Closed.
     const btnUpdate = document.getElementById('btn-detail-update');
     if (btnUpdate) {
-        const isAuthorized = (role === 'MD') || (role === 'Dept Head' && issue.picId === currentUserId);
-        btnUpdate.style.display = (isAuthorized && issue.status !== 'Closed') ? 'block' : 'none';
+        const isMD = (role === 'MD');
+        const isOwnerDeptHead = (role === 'Dept Head' && issue.picId === currentUserId && issue.status !== 'Closed');
+        btnUpdate.style.display = (isMD || isOwnerDeptHead) ? 'block' : 'none';
     }
 
     const btnExport = document.getElementById('btn-detail-export');

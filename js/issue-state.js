@@ -7,5 +7,6 @@ export const state = {
     currentIssueIds: [],
     cachedMOMArchives : [],
     mdFilteredIssues: [],
-    mdCurrentPage: 1
+    mdCurrentPage: 1,
+    importRows: []
 };
