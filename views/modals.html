@@ -1,9 +1,9 @@
 <div id="modal-update" class="modal-overlay">
     <div class="modal-box" style="width: 450px; text-align: left;">
         <h3 style="margin-top: 0; color: #111827;">Update PICA Progress</h3>
-        <p class="subtitle" style="margin-bottom: 15px;">Update corrective actions and status.</p>
+        <p class="subtitle" style="margin-bottom: 15px;">Update status and progress notes.</p>
         <input type="hidden" id="update-id">
-        
+
         <label style="font-size: 13px; font-weight: 500; color: #4b5563;">Current Status:</label>
         <select id="update-status" style="margin-top: 4px;">
             <option value="Open">Open</option>
@@ -18,11 +18,11 @@
             </select>
         </div>
 
-        <label style="font-size: 13px; font-weight: 500; color: #4b5563;">Corrective Action:</label>
-        <textarea id="update-action" placeholder="Actions that have been taken..." rows="3" style="margin-top: 4px;"></textarea>
-        
-        <label style="font-size: 13px; font-weight: 500; color: #4b5563;">Remark / Additional Notes:</label>
-        <textarea id="update-remark" placeholder="Additional details or constraints..." rows="2" style="margin-top: 4px;"></textarea>
+        <div class="form-group" style="margin-top: 10px;">
+            <label>Remark / Additional Notes</label>
+            <div id="update-remark-points-container" style="display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; padding-right: 4px;"></div>
+            <button type="button" id="btn-add-remark-point" class="btn-sm btn-secondary" style="margin-top: 8px; width: fit-content;" onclick="addRemarkPoint()">+ Add Point</button>
+        </div>
 
         <div class="form-group" style="margin-top: 16px;">
             <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Upload Documentation (Optional)</label>
@@ -72,6 +72,25 @@
         <div style="display: flex; gap: 10px; margin-top: 24px;">
             <button onclick="submitPriority()">Save Priority</button>
             <button class="btn-secondary" onclick="closePriorityModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-category" class="modal-overlay">
+    <div class="modal-box" style="width: 350px; text-align: left;">
+        <h3 style="margin-top: 0; color: #111827;">Change Category</h3>
+        <p class="subtitle" style="margin-bottom: 15px;">Set the reporting category for this issue.</p>
+        <input type="hidden" id="cat-issue-id">
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Select Category:</label>
+        <select id="cat-select" style="margin-top: 6px;">
+            <option value="Daily">Daily</option>
+            <option value="Weekly">Weekly BOD</option>
+            <option value="Midyear">Midyear</option>
+            <option value="Annual">Annual</option>
+        </select>
+        <div style="display: flex; gap: 10px; margin-top: 24px;">
+            <button onclick="submitCategory()">Save Category</button>
+            <button class="btn-secondary" onclick="closeCategoryModal()">Cancel</button>
         </div>
     </div>
 </div>
@@ -149,7 +168,7 @@
 <div id="modal-import-excel" class="modal-overlay">
     <div class="modal-box" style="width: 720px; max-width: 95vw; text-align: left; max-height: 88vh; display: flex; flex-direction: column;">
         <h3 style="margin-top: 0; color: #111827;">Import Issues from Excel</h3>
-        <p class="subtitle" style="margin-bottom: 12px;">Upload an .xlsx/.xls/.csv file following the expected column layout: Case/Notification, Date Issue, Issued, Corrective Action, PIC, Due Date, Stat, Remark, SKALA. The "Issued" and "PIC" columns are kept as reference notes only — Issued By, PIC, and Department will all default to MD.</p>
+        <p class="subtitle" style="margin-bottom: 12px;">Upload an .xlsx/.xls/.csv file following the expected column layout: Case/Notification, Date Issue, Issued, Corrective Action, PIC, Due Date, Stat, Remark, SKALA, Category. The "Issued" and "PIC" columns are kept as reference notes only — Issued By, PIC, and Department will all default to MD. Category defaults to "Daily" if left blank or not recognized (Daily/Weekly/Midyear/Annual).</p>
 
         <div style="margin-bottom: 8px;">
             <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Excel File:</label>
@@ -171,6 +190,7 @@
                             <th style="width: 100px;">Due Date</th>
                             <th style="width: 90px; text-align:center;">Status</th>
                             <th style="width: 90px; text-align:center;">Scale</th>
+                            <th style="width: 90px; text-align:center;">Category</th>
                         </tr>
                     </thead>
                     <tbody id="import-preview-tbody"></tbody>

@@ -1,4 +1,83 @@
+import { API_URL, getAuthHeaders } from './config.js';
+
 let alertTimeout;
+
+// Catatan otomatis dari sistem (task forwarded/return, assignment dikoreksi MD, penanda hasil
+// import Excel) berguna untuk audit trail di dalam aplikasi, tapi bikin tampilan Remark di
+// export (PDF/Excel) jadi berantakan. Buang semua segmen otomatis itu sebelum masuk ke file
+// export — remark manual yang benar-benar diketik user tetap dipertahankan. Data asli di
+// database tidak berubah. Diletakkan di sini (bukan di issue-pdf.js) supaya bisa dipakai
+// bareng oleh js/issue-pdf.js DAN js/issue-excel-export.js tanpa saling circular-import.
+const AUTO_SYSTEM_NOTE_PATTERNS = [
+    /^\[🔄.*Task Forwarded to:/i,          // PIC dipindahkan/forward ke PIC lain
+    /^\[✏️.*Assignment corrected manually/i, // Issued By/PIC dikoreksi manual oleh MD
+    /^\[Imported via Excel by/i,            // penanda hasil Import Excel
+    /^Original Date Issue:/i,               // catatan tanggal asli dari Import Excel
+    /^Original Issued \(Excel\):/i,         // catatan "Issued" asli dari Import Excel
+    /^Original PIC \(Excel\):/i,            // catatan "PIC" asli dari Import Excel
+];
+
+export function stripAutoForwardNotes(text) {
+    if (!text) return '';
+    return text
+        .split('|')
+        .map(part => part.trim())
+        .filter(part => part && !AUTO_SYSTEM_NOTE_PATTERNS.some(re => re.test(part)))
+        .join(' | ');
+}
+
+// --- HELPER: MENGUBAH GAMBAR LOGO MENJADI BASE64 (DIPAKAI OLEH EXPORT PDF & EXCEL) ---
+export function getBase64Image(imgPath) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL("image/png"));
+        };
+        img.onerror = () => {
+            console.warn("Gagal memuat logo, fallback ke teks.");
+            resolve(null);
+        };
+        img.src = imgPath;
+    });
+}
+
+// --- ARSIP MOM: SIMPAN CATATAN MEETING KE BACKEND (DIPAKAI OLEH EXPORT PDF & EXCEL) ---
+export async function archiveMOMRecord(archiveObject) {
+    const response = await fetch(`${API_URL}/arsip-mom`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(archiveObject)
+    });
+    return response.ok;
+}
+
+// --- ZONA WAKTU TAMPILAN: SELALU WITA (Asia/Makassar, UTC+8) ---
+// Backend menyimpan & mengirim semua timestamp (createdAt/updatedAt/dll) dalam UTC murni
+// (format ISO diakhiri "Z") — itu sudah benar dan tidak perlu diubah. Tanpa opsi timeZone
+// eksplisit di sini, JS akan otomatis mengonversi ke timezone OS laptop yang menjalankan
+// aplikasi, yang seharusnya WITA tapi rawan salah kalau ada laptop kiosk yang jam/zona
+// waktunya belum diset dengan benar. Fungsi ini memaksa tampilan selalu WITA apa pun
+// timezone OS-nya, supaya tanggal/jam yang dilihat user selalu konsisten benar.
+export const WITA_TIMEZONE = 'Asia/Makassar';
+
+export function formatWitaDate(dateInput, locale = 'en-GB', options = {}) {
+    if (!dateInput) return '-';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleDateString(locale, { ...options, timeZone: WITA_TIMEZONE });
+}
+
+export function formatWitaDateTime(dateInput, locale = 'en-GB', options = {}) {
+    if (!dateInput) return '-';
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return '-';
+    return d.toLocaleString(locale, { ...options, timeZone: WITA_TIMEZONE });
+}
 
 export function showCustomAlert(title, message) {
     const alertBox = document.getElementById('custom-alert');

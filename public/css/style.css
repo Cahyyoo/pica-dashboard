@@ -38,10 +38,10 @@ header {
 .header-info { display: flex; align-items: center; gap: 24px; font-size: 14px; color: #f1f5f9; } 
 
 footer { padding: 12px 32px; font-size: 12px; color: #9ca3af; display: flex; justify-content: space-between; margin-top: auto; }
-.main-content { flex: 1; position: relative; }
+.main-content { flex: 1; position: relative; min-height: 0; }
 
 /* 1. UBAH CLASS .screen DAN TAMBAHKAN .screen-center */
-.screen { display: none; height: 100%; width: 100%; justify-content: safe center; align-items: safe center; flex-direction: column; padding-top: 40px; box-sizing: border-box; overflow-y: auto; padding-bottom: 40px; opacity: 0; animation: fadeIn 0.3s ease forwards; }
+.screen { display: none; height: 100%; width: 100%; justify-content: safe flex-start; align-items: safe center; flex-direction: column; padding-top: 40px; box-sizing: border-box; overflow-y: auto; padding-bottom: 40px; opacity: 0; animation: fadeIn 0.3s ease forwards; }
 .screen-center { justify-content: safe center; padding-top: 0; padding-bottom: 0; }
 .active { display: flex; }
 
@@ -80,7 +80,7 @@ tr:hover td { background-color: #f1f5f9; }
     width: 400px; 
     text-align: center; 
 }
-.card-wide { width: 95%; max-width: 1400px; max-height: 85vh; display: flex; flex-direction: column; padding: 30px; }
+.card-wide { width: 95%; max-width: 1400px; max-height: 90vh; display: flex; flex-direction: column; padding: 30px; }
 .card-admin { width: 90%; max-width: 1000px; display: flex; flex-direction: row; gap: 40px; text-align: left; align-items: flex-start; }
 
 h2 { font-weight: 600; margin-top: 0; color: #111827; }
@@ -131,6 +131,7 @@ button:hover { background: var(--blue-light); color: #111827; } /* Saat di-hover
     box-shadow: 0 10px 25px rgba(0,0,0,0.2);
     transform: scale(0.8) translateY(-30px); opacity: 0;
     transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+    max-height: 90vh; overflow-y: auto; box-sizing: border-box;
 }
 .modal-overlay.show .modal-box { transform: scale(1) translateY(0); opacity: 1; }   
 .modal-box h3 { margin-top: 0; color: #111827; font-size: 18px;}
@@ -153,7 +154,7 @@ button:hover { background: var(--blue-light); color: #111827; } /* Saat di-hover
 .timeline-date { font-size: 12px; color: #6b7280; font-weight: 600; margin-bottom: 6px; display: flex; justify-content: space-between; }
 .timeline-box { background: white; padding: 16px; border-radius: 8px; border: 1px solid var(--blue-pale); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
 .timeline-action { font-size: 14px; color: #1f2937; margin: 0 0 10px 0; line-height: 1.5; }
-.timeline-remark { font-size: 13px; color: #854d0e; background: #fefce8; padding: 10px; border-radius: 6px; border-left: 3px solid #facc15; margin: 0; }
+.timeline-remark { font-size: 13px; color: #4b5563; line-height: 1.5; background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; margin: 0; white-space: pre-wrap; }
 
 /* --- DESAIN LOGIN SPLIT (SaaS STYLE) --- */
 .login-split-card {

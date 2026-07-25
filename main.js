@@ -228,7 +228,7 @@ function checkServerConnection() {
     return new Promise((resolve) => {
         // GANTI URL DI BAWAH dengan IP lokal backend Anda, misal: 'http://192.168.1.100:3000'
         const apiUrl = 'http://192.168.100.205:3000'; 
-        // const apiUrl = 'http://localhost:3000'; 
+        // const apiUrl = 'http://localhost:3008'; 
         
         const req = http.get(apiUrl, (res) => {
             // Jika ada respon dari server, berarti laptop terhubung ke jaringan kantor

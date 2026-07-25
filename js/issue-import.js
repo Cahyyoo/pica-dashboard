@@ -11,7 +11,7 @@ import { showCustomAlert } from './utils.js';
 import { state } from './issue-state.js';
 import { loadDashboardMD, fetchUsersForMapping } from './issue-dashboard.js';
 
-const EXPECTED_HEADERS = ['Case/Notification', 'Date Issue', 'Issued', 'Corrective Action', 'PIC', 'Due Date', 'Stat', 'Remark', 'SKALA'];
+const EXPECTED_HEADERS = ['Case/Notification', 'Date Issue', 'Issued', 'Corrective Action', 'PIC', 'Due Date', 'Stat', 'Remark', 'SKALA', 'Category'];
 const DEFAULT_DEPARTMENT = 'MD';
 
 // PENTING: TIDAK mengandalkan window.XLSX (global dari <script> tag). Karena window ini
@@ -43,6 +43,14 @@ function normalizePriority(text) {
     if (/prio\s*2|priority\s*2/.test(t)) return 'Prio 2';
     if (/prio\s*3|priority\s*3/.test(t)) return 'Prio 3';
     return 'Pending';
+}
+
+function normalizeCategory(text) {
+    const t = String(text || '').toLowerCase();
+    if (t.includes('week')) return 'Weekly';
+    if (t.includes('mid')) return 'Midyear';
+    if (t.includes('annual') || t.includes('year')) return 'Annual';
+    return 'Daily'; // Default kalau kolom Category kosong/tidak dikenali di file Excel
 }
 
 function normalizeDueDate(text) {
@@ -114,7 +122,8 @@ export async function downloadImportTemplate() {
             'Due Date': '2026-05-31',
             'Stat': 'Progress',
             'Remark': 'Additional notes...',
-            'SKALA': 'Prio 2'
+            'SKALA': 'Prio 2',
+            'Category': 'Daily'
         };
         const ws = XLSX.utils.json_to_sheet([sampleRow], { header: EXPECTED_HEADERS });
         const wb = XLSX.utils.book_new();
@@ -213,6 +222,7 @@ export async function handleImportFileSelect(inputEl) {
                 status: normalizeStatus(get('status')),
                 remark: get('remark'),
                 priority: normalizePriority(get('priority')),
+                category: normalizeCategory(get('category')),
                 // Disimpan hanya sebagai referensi di Remark. Issued By & PIC selalu = MD yang login.
                 issuerRaw: get('issuer'),
                 picRaw: get('pic')
@@ -247,6 +257,7 @@ function detectColumns(headerCells) {
         else if (map.status === undefined && h.startsWith('stat')) map.status = idx;
         else if (map.remark === undefined && h.includes('remark')) map.remark = idx;
         else if (map.priority === undefined && (h.includes('skala') || h.includes('scale') || h.includes('prio'))) map.priority = idx;
+        else if (map.category === undefined && (h.includes('category') || h.includes('kategori'))) map.category = idx;
     });
     return map;
 }
@@ -279,6 +290,7 @@ function renderImportPreview() {
             <td style="white-space:nowrap;">${row.dueDate || '-'}</td>
             <td style="text-align:center;">${row.status}</td>
             <td style="text-align:center;">${row.priority}</td>
+            <td style="text-align:center;">${row.category}</td>
         </tr>`;
     });
 
@@ -318,6 +330,8 @@ export async function submitImportRows() {
                     title: row.title,
                     department,
                     description: row.correctiveAction || row.title,
+                    correctiveAction: row.correctiveAction || row.title,
+                    category: row.category,
                     issuedBy: String(currentUserId),
                     dueDate: row.dueDate || new Date().toISOString().split('T')[0],
                     priority: row.priority
@@ -341,7 +355,6 @@ export async function submitImportRows() {
 
                 const formData = new FormData();
                 formData.append('status', row.status);
-                formData.append('correctiveAction', row.correctiveAction || '');
                 formData.append('remark', remarkParts.join(' | '));
                 formData.append('picId', String(currentUserId));
 

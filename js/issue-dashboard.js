@@ -1,9 +1,10 @@
 // js/issue-dashboard.js
 import { API_URL } from './config.js';
-import { showCustomAlert, showView, getStatusBadge, getDailyUpdateBadge } from './utils.js';
+import { showCustomAlert, showView, getStatusBadge, getDailyUpdateBadge, formatWitaDate, formatWitaDateTime } from './utils.js';
 import { state } from './issue-state.js';
 import { openDetailView } from './issue-detail.js';
 import { exportFilteredIssuesToPDF } from './issue-pdf.js';
+import { exportFilteredIssuesToExcel } from './issue-excel-export.js';
 
 export async function fetchUsersForMapping() {
     try {
@@ -44,7 +45,7 @@ export async function openUserHistory() {
         state.currentIssueIds = myIssues.map(i => i.id);
 
         myIssues.forEach((item, index) => {
-            const dateStr = new Date(item.createdAt).toLocaleDateString('en-GB');
+            const dateStr = formatWitaDate(item.createdAt);
             const picUser = state.globalUsers.find(u => String(u.id) === String(item.picId));
             const picName = picUser ? picUser.username : 'Unassigned';
             
@@ -111,6 +112,7 @@ export function applyFilterMD() {
     const searchFilter = document.getElementById('search-md').value.toLowerCase();
     const statusFilter = document.getElementById('filter-status-md').value;
     const scaleFilter = document.getElementById('filter-scale-md').value;
+    const categoryFilter = document.getElementById('filter-category-md').value;
     const startDateFilter = document.getElementById('filter-date-start-md').value;
     const endDateFilter = document.getElementById('filter-date-end-md').value;
 
@@ -118,6 +120,7 @@ export function applyFilterMD() {
     const filteredIssues = state.globalIssues.filter(item => {
         const matchStatus = (statusFilter === 'All') || (item.status === statusFilter);
         const matchScale = (scaleFilter === 'All') || (item.priority === scaleFilter);
+        const matchCategory = (categoryFilter === 'All') || (item.category === categoryFilter);
 
         let matchDate = true;
         if (startDateFilter || endDateFilter) {
@@ -152,7 +155,7 @@ export function applyFilterMD() {
                             safeId.includes(searchFilter);
 
         // Harus lolos SEMUA filter
-        return matchStatus && matchScale && matchDate && matchSearch;
+        return matchStatus && matchScale && matchCategory && matchDate && matchSearch;
     });
 
     const statusOrder = { 'Open': 1, 'Progress': 2, 'Closed': 3 };
@@ -223,7 +226,7 @@ function renderMDTable() {
 
     // 3. Render Tabel
     if (pageItems.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: #6b7280; padding: 24px;">No data found matching the selected filters.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: #6b7280; padding: 24px;">No data found matching the selected filters.</td></tr>`;
         return;
     }
 
@@ -231,8 +234,8 @@ function renderMDTable() {
     let rowsHTML = '';
 
     pageItems.forEach((item, index) => {
-        const dateStr = new Date(item.createdAt).toLocaleDateString('en-GB');
-        const dueDateStr = item.dueDate ? new Date(item.dueDate).toLocaleDateString('en-GB') : '-';
+        const dateStr = formatWitaDate(item.createdAt);
+        const dueDateStr = formatWitaDate(item.dueDate);
 
         let dueDateDisplay = dueDateStr;
         if (role === 'MD') {
@@ -257,6 +260,12 @@ function renderMDTable() {
             prioBadge = `<span class="badge badge-prio" style="cursor:pointer; border:1px dashed #d97706;" onclick="openPriorityModal(${item.id}, '${item.priority}')" title="Change Priority">${item.priority}</span>`;
         }
 
+        const categoryText = item.category || '-';
+        let categoryBadge = `<span class="badge" style="background:#dcfce7; color:#15803d;">${categoryText}</span>`;
+        if (role === 'MD') {
+            categoryBadge = `<span class="badge" style="background:#dcfce7; color:#15803d; cursor:pointer; border:1px dashed #16a34a;" onclick="openCategoryModal(${item.id}, '${item.category || 'Daily'}')" title="Change Category">${categoryText}</span>`;
+        }
+
         rowsHTML += `<tr>
             <td style="text-align: center;">${startIndex + index + 1}</td>
             <td>${item.caseNotification}</td>
@@ -266,6 +275,7 @@ function renderMDTable() {
             <td style="font-weight: 500;">${picDisplay}</td>
             <td style="text-align: center;">${getStatusBadge(item.status)}</td>
             <td style="text-align: center;">${prioBadge}</td>
+            <td style="text-align: center;">${categoryBadge}</td>
             <td style="text-align: center;">${getDailyUpdateBadge(item)}</td>
             <td style="text-align: center;"><button class="btn-sm" onclick="openDetailView(${item.id})">View Details</button></td>
         </tr>`;
@@ -333,7 +343,7 @@ export function filterUserHistory() {
     }
     
     filteredIssues.forEach((item, index) => {
-        const dateStr = new Date(item.createdAt).toLocaleDateString('en-GB');
+        const dateStr = formatWitaDate(item.createdAt);
         const picUser = state.globalUsers.find(u => String(u.id) === String(item.picId));
         const picName = picUser ? picUser.username : 'Unassigned';
         
@@ -399,7 +409,7 @@ export function filterPICHistory() {
     }
 
     filteredIssues.forEach((item, index) => {
-        const dueDateStr = item.dueDate ? new Date(item.dueDate).toLocaleDateString('en-GB') : '-';
+        const dueDateStr = formatWitaDate(item.dueDate);
         const prioBadge = `<span class="badge badge-prio">${item.priority}</span>`;
 
         tbody.innerHTML += `<tr>
@@ -467,7 +477,7 @@ export async function loadDashboardPIC() {
         }
 
         activeIssues.forEach((item, index) => {
-            const dueDateStr = item.dueDate ? new Date(item.dueDate).toLocaleDateString('en-GB') : '-';
+            const dueDateStr = formatWitaDate(item.dueDate);
             const prioBadge = `<span class="badge badge-prio">${item.priority}</span>`;
 
             tbody.innerHTML += `<tr>
@@ -494,7 +504,7 @@ export async function loadMOMArchives() {
     try {
         // Sesuaikan dengan port backend NestJS Anda (biasanya 3000)
         const apiUrl = 'http://192.168.100.205:3000';
-        // const apiUrl = 'http://localhost:3000';
+        // const apiUrl = 'http://localhost:3008';
         const token = localStorage.getItem('access_token');
 
         // Panggil endpoint GET dari backend NestJS
@@ -519,9 +529,9 @@ export async function loadMOMArchives() {
                 const tr = document.createElement('tr');
                 
                 // Format tanggal export menjadi format yang rapi (English)
-                const exportDate = new Date(arsip.tanggalExport || arsip.tanggal_export).toLocaleString('en-GB', { 
-                    day: '2-digit', month: 'short', year: 'numeric', 
-                    hour: '2-digit', minute: '2-digit' 
+                const exportDate = formatWitaDateTime(arsip.tanggalExport || arsip.tanggal_export, 'en-GB', {
+                    day: '2-digit', month: 'short', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
                 });
 
                 tr.innerHTML = `
@@ -595,7 +605,8 @@ export function viewMOMDetail(id) {
     }
 
     // Sambungkan tombol download ke ID ini
-    document.getElementById('btn-redownload').setAttribute('onclick', `downloadMOMArchive(${id})`);
+    document.getElementById('btn-redownload').setAttribute('onclick', `downloadMOMArchive(${id}, 'pdf')`);
+    document.getElementById('btn-redownload-excel').setAttribute('onclick', `downloadMOMArchive(${id}, 'excel')`);
 
     // Tampilkan Modal dengan Transisi
     const modal = document.getElementById('modal-mom-detail');
@@ -636,9 +647,9 @@ export async function refreshMOMArchives() {
 }
 
 // ==========================================
- // FITUR RE-DOWNLOAD PDF ARSIP
+ // FITUR RE-DOWNLOAD ARSIP (PDF ATAU EXCEL)
  // ==========================================
- export async function downloadMOMArchive(id) {
+ export async function downloadMOMArchive(id, format = 'pdf') {
      const archive = state.cachedMOMArchives.find(a => a.id === id);
      if (!archive) return showCustomAlert("Error", "Archive data not found in memory!");
 
@@ -665,7 +676,8 @@ export async function refreshMOMArchives() {
          isArchive: true // Tanda bahwa ini adalah proses download ulang
      };
 
-     // Tutup modal agar rapi, lalu jalankan fungsi PDF
+     // Tutup modal agar rapi, lalu jalankan fungsi export sesuai format yang diminta
      closeMOMDetail();
-     await exportFilteredIssuesToPDF('MD', momData);
+     if (format === 'excel') await exportFilteredIssuesToExcel('MD', momData);
+     else await exportFilteredIssuesToPDF('MD', momData);
  }

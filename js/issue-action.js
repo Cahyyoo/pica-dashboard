@@ -1,6 +1,6 @@
 // js/issue-action.js
 import { API_URL, getAuthHeaders } from './config.js';
-import { showCustomAlert, showView } from './utils.js';
+import { showCustomAlert, showView, stripAutoForwardNotes } from './utils.js';
 import { state } from './issue-state.js';
 import { loadDashboardMD, loadDashboardPIC } from './issue-dashboard.js';
 import { openDetailView } from './issue-detail.js';
@@ -10,22 +10,26 @@ export async function submitIssue() {
     const dept = document.getElementById('issue-dept').value;
     const desc = document.getElementById('issue-desc').value;
     const dueDate = document.getElementById('issue-due-date').value;
+    const correctiveAction = document.getElementById('issue-corrective-action').value;
+    const category = document.getElementById('issue-category').value;
     const issuerId = localStorage.getItem('user_id');
-    
-    if (!title || !dept || !desc || !dueDate) return showCustomAlert("Warning", "All fields are required!");
-    
+
+    if (!title || !dept || !desc || !dueDate || !correctiveAction || !category) return showCustomAlert("Warning", "All fields are required!");
+
     try {
         const response = await fetch(`${API_URL}/issue/create`, {
             method: 'POST', headers: getAuthHeaders(),
-            body: JSON.stringify({ title, department: dept, description: desc, issuedBy: String(issuerId), dueDate: dueDate, priority: "Pending" })
+            body: JSON.stringify({ title, department: dept, description: desc, correctiveAction, category, issuedBy: String(issuerId), dueDate: dueDate, priority: "Pending" })
         });
-        
+
         if (response.ok) {
             showCustomAlert("Success", "Report submitted successfully!");
-            document.getElementById('issue-title').value = ''; 
-            document.getElementById('issue-dept').value = ''; 
-            document.getElementById('issue-desc').value = ''; 
+            document.getElementById('issue-title').value = '';
+            document.getElementById('issue-dept').value = '';
+            document.getElementById('issue-desc').value = '';
             document.getElementById('issue-due-date').value = '';
+            document.getElementById('issue-corrective-action').value = '';
+            document.getElementById('issue-category').value = '';
             window.backToMenu();
         } else showCustomAlert("Failed", "Server error occurred.");
     } catch (error) { showCustomAlert("Server Error", "Failed to connect to backend."); }
@@ -47,11 +51,96 @@ export function openUpdateFromDetail() {
     openUpdateModal(issue);
 }
 
+// ==========================================
+// REMARK PERPOIN & DINAMIS (setiap poin punya status In Progress/Closed sendiri,
+// terpisah dari dropdown "Current Status" issue secara keseluruhan)
+// ==========================================
+const MAX_REMARK_POINTS = 10;
+
+function renumberRemarkPoints() {
+    const container = document.getElementById('update-remark-points-container');
+    if (!container) return;
+    Array.from(container.children).forEach((row, index) => {
+        const numEl = row.querySelector('.remark-point-num');
+        if (numEl) numEl.innerText = `${index + 1}.`;
+    });
+}
+
+window.addRemarkPoint = function (text = '', status = 'Progress') {
+    const container = document.getElementById('update-remark-points-container');
+    if (!container) return;
+
+    if (container.children.length >= MAX_REMARK_POINTS) {
+        return showCustomAlert("Warning", `Maximum ${MAX_REMARK_POINTS} remark points allowed.`);
+    }
+
+    const uniqueId = 'remark-point-' + Date.now() + Math.random().toString(36).substr(2, 5);
+    const row = document.createElement('div');
+    row.id = uniqueId;
+    row.className = 'remark-point-row';
+    row.style.cssText = 'display: flex; align-items: center; gap: 8px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 8px;';
+
+    row.innerHTML = `
+        <span class="remark-point-num" style="font-size: 12px; font-weight: bold; color: #6b7280; min-width: 16px;"></span>
+        <select class="remark-point-status" style="width: auto; margin: 0; padding: 4px 6px; font-size: 12px; flex-shrink: 0;">
+            <option value="Progress">In Progress</option>
+            <option value="Closed">Closed</option>
+        </select>
+        <input type="text" class="remark-point-text" placeholder="Describe this point..." style="flex: 1; margin: 0; padding: 6px 8px; font-size: 13px;">
+        <button type="button" onclick="removeRemarkPoint('${uniqueId}')" style="background:none; border:none; color:#ef4444; cursor:pointer; font-weight:bold; font-size: 16px; padding: 0 4px; width:auto;" title="Remove">&times;</button>
+    `;
+
+    container.appendChild(row);
+    row.querySelector('.remark-point-status').value = status;
+    row.querySelector('.remark-point-text').value = text;
+
+    renumberRemarkPoints();
+};
+
+window.removeRemarkPoint = function (id) {
+    const row = document.getElementById(id);
+    if (row) row.remove();
+    renumberRemarkPoints();
+};
+
+// Baca ulang poin-poin remark dari update TERAKHIR (mis. yang diketik kemarin), supaya PIC
+// tidak perlu mengetik ulang poin yang sama tiap hari — cukup ubah status In Progress -> Closed
+// begitu poin itu selesai, atau tambah poin baru. Cuma cocok kalau formatnya persis
+// "1. [Status] teks" (hasil fitur remark perpoin ini) — remark lama/bebas sebelum fitur ini
+// dibiarkan diabaikan (modal tetap mulai dengan 1 poin kosong seperti biasa).
+function parsePreviousRemarkPoints(issue) {
+    if (!issue.histories || issue.histories.length === 0) return [];
+
+    const latestHistory = [...issue.histories].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+    const cleanedRemark = stripAutoForwardNotes(latestHistory.remark);
+    if (!cleanedRemark) return [];
+
+    const pointPattern = /^\d+\.\s*\[(In Progress|Closed)\]\s*(.+)$/i;
+    const points = [];
+    cleanedRemark.split('\n').forEach(line => {
+        const match = line.trim().match(pointPattern);
+        if (match) {
+            const status = match[1].toLowerCase() === 'closed' ? 'Closed' : 'Progress';
+            points.push({ text: match[2].trim(), status });
+        }
+    });
+    return points;
+}
+
+function resetRemarkPoints(seedPoints = []) {
+    const container = document.getElementById('update-remark-points-container');
+    if (container) container.innerHTML = '';
+    if (seedPoints.length > 0) {
+        seedPoints.forEach(p => window.addRemarkPoint(p.text, p.status));
+    } else {
+        window.addRemarkPoint(); // Selalu mulai dengan minimal 1 poin kosong
+    }
+}
+
 export function openUpdateModal(issue) {
     document.getElementById('update-id').value = issue.id;
     document.getElementById('update-status').value = issue.status;
-    document.getElementById('update-action').value = '';
-    document.getElementById('update-remark').value = '';
+    resetRemarkPoints(parsePreviousRemarkPoints(issue));
 
     const fileInput = document.getElementById('update-evidence');
     if (fileInput) fileInput.value = '';
@@ -84,12 +173,12 @@ export function openUpdateModal(issue) {
     document.getElementById('modal-update').classList.add('show');
 }
 
-export function closeUpdateModal() { 
-    document.getElementById('modal-update').classList.remove('show'); 
-    
+export function closeUpdateModal() {
+    document.getElementById('modal-update').classList.remove('show');
+
     // Reset form field
-    document.getElementById('update-action').value = '';
-    document.getElementById('update-remark').value = '';
+    const remarkContainer = document.getElementById('update-remark-points-container');
+    if (remarkContainer) remarkContainer.innerHTML = '';
 
     // Reset Input File
     const fileInput = document.getElementById('update-evidence');
@@ -114,8 +203,18 @@ export function closeUpdateModal() {
 export async function submitUpdate() {
     const id = document.getElementById('update-id').value;
     const status = document.getElementById('update-status').value;
-    const action = document.getElementById('update-action').value;
-    let remark = document.getElementById('update-remark').value;
+
+    // Gabungkan poin-poin remark dinamis jadi satu teks bernomor, masing-masing dengan
+    // tag status sendiri (In Progress/Closed) — terpisah dari status issue secara keseluruhan.
+    const statusLabel = { Progress: 'In Progress', Closed: 'Closed' };
+    const remarkPoints = [];
+    document.querySelectorAll('#update-remark-points-container .remark-point-row').forEach(row => {
+        const text = row.querySelector('.remark-point-text').value.trim();
+        const pointStatus = row.querySelector('.remark-point-status').value;
+        if (text) remarkPoints.push(`[${statusLabel[pointStatus] || pointStatus}] ${text}`);
+    });
+    let remark = remarkPoints.map((p, i) => `${i + 1}. ${p}`).join('\n');
+
     const selectPic = document.getElementById('update-pic');
     const newPicId = selectPic ? selectPic.value : null;
 
@@ -128,7 +227,6 @@ export async function submitUpdate() {
     // 1. Gunakan FormData (Bukan JSON.stringify) karena kita mengirim File
     const formData = new FormData();
     formData.append('status', status);
-    formData.append('correctiveAction', action);
     if (remark) formData.append('remark', remark);
     if (newPicId) formData.append('picId', newPicId);
     
@@ -190,6 +288,33 @@ export async function submitPriority() {
         if (response.ok) {
             closePriorityModal();
             showCustomAlert("Success", "Priority scale updated successfully!");
+            await loadDashboardMD();
+            if (document.getElementById('view-issue-detail').classList.contains('active')) openDetailView(Number(id));
+        } else showCustomAlert("Failed", "An error occurred.");
+    } catch (error) { showCustomAlert("Error", "Server error."); }
+}
+
+// ==========================================
+// FUNGSI UBAH KATEGORI (HANYA UNTUK MD)
+// ==========================================
+export function openCategoryModal(id, currentCategory) {
+    document.getElementById('cat-issue-id').value = id;
+    document.getElementById('cat-select').value = currentCategory || 'Daily';
+    document.getElementById('modal-category').classList.add('show');
+}
+
+export function closeCategoryModal() { document.getElementById('modal-category').classList.remove('show'); }
+
+export async function submitCategory() {
+    const id = document.getElementById('cat-issue-id').value;
+    const category = document.getElementById('cat-select').value;
+    try {
+        const response = await fetch(`${API_URL}/issue/category/${id}`, {
+            method: 'PATCH', headers: getAuthHeaders(), body: JSON.stringify({ category })
+        });
+        if (response.ok) {
+            closeCategoryModal();
+            showCustomAlert("Success", "Category updated successfully!");
             await loadDashboardMD();
             if (document.getElementById('view-issue-detail').classList.contains('active')) openDetailView(Number(id));
         } else showCustomAlert("Failed", "An error occurred.");
@@ -312,7 +437,6 @@ export async function submitEditAssignment() {
 
     const formData = new FormData();
     formData.append('status', currentStatus);
-    formData.append('correctiveAction', '');
     formData.append('remark', `[✏️ Assignment corrected manually by MD — Issued By: ${issuerLabel}, PIC: ${picLabel}]`);
     formData.append('issuedBy', issuedBy);
     if (picId) formData.append('picId', picId);

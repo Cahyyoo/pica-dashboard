@@ -1,6 +1,7 @@
 // js/issue-pdf.js
-import { showCustomAlert } from './utils.js';
+import { showCustomAlert, formatWitaDate, formatWitaDateTime, stripAutoForwardNotes, archiveMOMRecord, getBase64Image } from './utils.js';
 import { state } from './issue-state.js';
+import { exportFilteredIssuesToExcel } from './issue-excel-export.js';
 
 export async function exportSingleIssueToPDF() {
     const userRole = localStorage.getItem('user_role');
@@ -22,7 +23,7 @@ export async function exportSingleIssueToPDF() {
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100, 100, 100);
-    doc.text(`Generated Date: ${new Date().toLocaleString('en-GB')}`, 14, 26);
+    doc.text(`Generated Date: ${formatWitaDateTime(new Date())}`, 14, 26);
 
     doc.setDrawColor(229, 231, 235);
     doc.line(14, 30, 196, 30);
@@ -39,11 +40,12 @@ export async function exportSingleIssueToPDF() {
         theme: 'plain',
         body: [
             ["Case / Title:", safeTitle],
-            ["Report Date:", new Date(issue.createdAt).toLocaleDateString('en-GB')],
+            ["Report Date:", formatWitaDate(issue.createdAt)],
             ["Issued By (Reporter):", issuerName],
-            ["Target Due Date:", issue.dueDate ? new Date(issue.dueDate).toLocaleDateString('en-GB') : '-'],
+            ["Target Due Date:", formatWitaDate(issue.dueDate)],
             ["PIC Assigned:", picName],
             ["Priority Scale:", issue.priority],
+            ["Category:", issue.category || '-'],
             ["Current Status:", issue.status],
         ],
         columnStyles: {
@@ -66,35 +68,50 @@ export async function exportSingleIssueToPDF() {
     const safeDesc = (issue.description || '-').replace(/[^\x20-\x7E\n]/g, '');
     const splitDesc = doc.splitTextToSize(safeDesc, 182);
     doc.text(splitDesc, 14, finalY);
-    
+
     finalY += (splitDesc.length * 5) + 12;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(13);
     doc.setTextColor(17, 24, 39);
-    doc.text("Progress & Corrective Action History", 14, finalY);
+    doc.text("Corrective Action", 14, finalY);
+
+    finalY += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(75, 85, 99);
+
+    const safeCorrectiveAction = (issue.correctiveAction || '-').replace(/[^\x20-\x7E\n]/g, '');
+    const splitCorrectiveAction = doc.splitTextToSize(safeCorrectiveAction, 182);
+    doc.text(splitCorrectiveAction, 14, finalY);
+
+    finalY += (splitCorrectiveAction.length * 5) + 12;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(17, 24, 39);
+    doc.text("Progress & Status History", 14, finalY);
 
     const historyRows = [];
     if (issue.histories && issue.histories.length > 0) {
         issue.histories.forEach((h, index) => {
-            let safeAction = (h.correctiveAction || '-').replace(/🔄/g, '>> ').replace(/[^\x20-\x7E\n]/g, '');
-            let safeRemark = (h.remark || '-').replace(/🔄/g, '>> ').replace(/[^\x20-\x7E\n]/g, '');
+            const cleanedRemark = stripAutoForwardNotes(h.remark);
+            let safeRemark = (cleanedRemark || '-').replace(/[^\x20-\x7E\n]/g, '') || '-';
 
             historyRows.push([
                 index + 1,
-                new Date(h.createdAt).toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}),
+                formatWitaDate(h.createdAt, 'en-GB', {day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}),
                 h.status,
-                safeAction,
                 safeRemark
             ]);
         });
     } else {
-        historyRows.push([{ content: "No corrective actions taken yet.", colSpan: 5, styles: { halign: 'center', fontStyle: 'italic', textColor: [156, 163, 175] } }]);
+        historyRows.push([{ content: "No progress updates yet.", colSpan: 4, styles: { halign: 'center', fontStyle: 'italic', textColor: [156, 163, 175] } }]);
     }
 
     doc.autoTable({
         startY: finalY + 4,
-        head: [["No", "Date & Time", "Status", "Corrective Action", "Remarks / Notes"]],
+        head: [["No", "Date & Time", "Status", "Remarks / Notes"]],
         body: historyRows,
         headStyles: { fillColor: [21, 145, 220], textColor: [255, 255, 255], fontStyle: 'bold' },
         styles: { fontSize: 9 },
@@ -204,9 +221,18 @@ window.updateParticipantNumbers = function() {
 
 setTimeout(preloadMOMInputs, 2000);
 
-export function openMOMModal() {
+// format: 'pdf' (default) atau 'excel' — menentukan tombol "Export PDF"/"Export Excel" mana
+// di dashboard MD yang membuka modal ini, supaya submitMOMExport() tahu harus generate yang mana.
+export function openMOMModal(format = 'pdf') {
     const dateInput = document.getElementById('mom-date');
     if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+
+    const formatInput = document.getElementById('mom-export-format');
+    if (formatInput) formatInput.value = format;
+
+    const btnGenerate = document.getElementById('btn-mom-generate');
+    if (btnGenerate) btnGenerate.innerText = format === 'excel' ? 'Generate Excel' : 'Generate PDF';
+
     document.getElementById('modal-mom-export').style.display = 'flex';
 }
 
@@ -216,14 +242,17 @@ export function closeMOMModal() {
 
 export function submitMOMExport() {
     try {
-        const momData = {
-            notulen: document.getElementById('mom-notulen').value.trim(),
-            chairman: document.getElementById('mom-chairman').value.trim(),
-            date: document.getElementById('mom-date').value,
-            time: document.getElementById('mom-time').value.trim(),
-            location: document.getElementById('mom-location').value.trim(),
-            participants: []
-        };
+        const notulen = document.getElementById('mom-notulen').value.trim();
+        const chairman = document.getElementById('mom-chairman').value.trim();
+        const date = document.getElementById('mom-date').value;
+        const time = document.getElementById('mom-time').value.trim();
+        const location = document.getElementById('mom-location').value.trim();
+
+        if (!notulen || !chairman || !date || !time || !location) {
+            return showCustomAlert("Warning", "Please complete Note Taker, Chairman, Date, Time, and Location before exporting.");
+        }
+
+        const momData = { notulen, chairman, date, time, location, participants: [] };
 
         // AMBIL DATA DARI SELURUH INPUT DINAMIS YANG ADA DI LAYAR
         const inputs = document.querySelectorAll('.mom-p-input');
@@ -233,11 +262,15 @@ export function submitMOMExport() {
             }
         });
 
-        closeMOMModal(); 
-        exportFilteredIssuesToPDF('MD', momData);
-        
+        const formatInput = document.getElementById('mom-export-format');
+        const format = formatInput ? formatInput.value : 'pdf';
+
+        closeMOMModal();
+        if (format === 'excel') exportFilteredIssuesToExcel('MD', momData);
+        else exportFilteredIssuesToPDF('MD', momData);
+
     } catch (error) {
-        console.error("Failed while generating PDF: ", error);
+        console.error("Failed while generating export: ", error);
         alert("System error while retrieving form data: " + error.message);
     }
 }
@@ -263,9 +296,9 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
     const dLocation = momData && momData.location ? momData.location : "Site office molore";
     
     // Format Tanggal (Dari input Date HTML ke Format Lokal GB)
-    let dDate = new Date().toLocaleDateString('en-GB');
+    let dDate = formatWitaDate(new Date());
     if (momData && momData.date) {
-        dDate = new Date(momData.date).toLocaleDateString('en-GB');
+        dDate = formatWitaDate(momData.date);
     }
 
     // Peserta Default (Jika kosong)
@@ -284,12 +317,15 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
     else if (role === 'MD') {
         const statusFilter = document.getElementById('filter-status-md').value;
         const scaleFilter = document.getElementById('filter-scale-md').value;
+        const categoryFilter = document.getElementById('filter-category-md').value;
         const startDateFilter = document.getElementById('filter-date-start-md').value;
         const endDateFilter = document.getElementById('filter-date-end-md').value;
 
         filteredData = state.globalIssues.filter(item => {
-            const matchStatus = (statusFilter === 'All') || (item.status === statusFilter);
+            // Default "All Status" export excludes already-Closed issues; picking "Closed" explicitly still shows them.
+            const matchStatus = (statusFilter === 'All') ? (item.status !== 'Closed') : (item.status === statusFilter);
             const matchScale = (scaleFilter === 'All') || (item.priority === scaleFilter);
+            const matchCategory = (categoryFilter === 'All') || (item.category === categoryFilter);
             let matchDate = true;
             if (startDateFilter || endDateFilter) {
                 const issueDate = new Date(item.createdAt);
@@ -301,7 +337,7 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
                 else if (start) matchDate = issueDate >= start;
                 else if (end) matchDate = issueDate <= end;
             }
-            return matchStatus && matchScale && matchDate;
+            return matchStatus && matchScale && matchCategory && matchDate;
         });
     }
 
@@ -388,35 +424,31 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
         const picName = picUser ? picUser.username : '-';
         const safeTitle = (item.caseNotification || '-').replace(/[^\x20-\x7E\n]/g, '');
 
-        // Mengekstrak history menjadi list bernomor (1. Aksi A, 2. Aksi B)
-        let correctiveActions = "-";
-        let remarks = "-";
+        // Corrective Action sekarang diisi sekali di awal (saat issue dibuat), bukan per-history lagi.
+        const correctiveActions = (item.correctiveAction || item.description || '-').replace(/[^\x20-\x7E\n]/g, '');
 
+        let remarks = "-";
         if (item.histories && item.histories.length > 0) {
-            const validActions = item.histories.filter(h => h.correctiveAction);
-            if (validActions.length > 0) {
-                correctiveActions = validActions.map((h, i) => `${i + 1}. ${h.correctiveAction.replace(/[^\x20-\x7E\n]/g, '')}`).join('\n');
-            }
-            const validRemarks = item.histories.filter(h => h.remark);
+            const validRemarks = item.histories
+                .map(h => stripAutoForwardNotes(h.remark))
+                .filter(Boolean);
             if (validRemarks.length > 0) {
-                remarks = validRemarks.map((h, i) => `${i + 1}. ${h.remark.replace(/🔄/g, '').replace(/[^\x20-\x7E\n]/g, '')}`).join('\n');
+                remarks = validRemarks.map((r, i) => `${i + 1}. ${r.replace(/[^\x20-\x7E\n]/g, '')}`).join('\n');
             }
-        } else if (item.description) {
-            // Fallback jika belum ada history, pakai deskripsi awal
-            correctiveActions = item.description.replace(/[^\x20-\x7E\n]/g, '');
         }
 
         return [
             index + 1,
             safeTitle,
-            new Date(item.createdAt).toLocaleDateString('en-US'), // Format M/D/YYYY
+            formatWitaDate(item.createdAt, 'en-US'), // Format M/D/YYYY
             issuerName,
             correctiveActions,
             picName,
-            item.dueDate ? new Date(item.dueDate).toLocaleDateString('en-US') : '-',
+            formatWitaDate(item.dueDate, 'en-US'),
             item.status,
             remarks,
-            item.priority || 'Prio 2' 
+            item.category || '-',
+            item.priority || 'Prio 2'
         ];
     });
 
@@ -426,11 +458,11 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
     doc.autoTable({
         startY: 38, // Mulai tepat di bawah kop tabel
         margin: { left: 10, right: 10 },
-        head: [["No", "Case/Notification", "Date Issued", "Issued", "Corrective Action", "PIC", "Due Date", "Status", "Remark", "SKALA"]],
+        head: [["No", "Case/Notification", "Date Issued", "Issued", "Corrective Action", "PIC", "Due Date", "Status", "Remark", "Category", "SKALA"]],
         body: tableBody,
         theme: 'grid',
         headStyles: {
-            fillColor: [255, 255, 255], 
+            fillColor: [255, 255, 255],
             textColor: [0, 0, 0],
             fontStyle: 'bold',
             halign: 'center',
@@ -446,26 +478,33 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
             valign: 'middle'
         },
         columnStyles: {
-            0: { halign: 'center', cellWidth: 10 }, 
-            1: { cellWidth: 45 }, 
-            2: { halign: 'center', cellWidth: 18 }, 
-            3: { halign: 'center', cellWidth: 15 }, 
-            4: { cellWidth: 55 }, // Corrective Action Lebar
-            5: { halign: 'center', cellWidth: 25 }, 
-            6: { halign: 'center', cellWidth: 18 }, 
-            7: { halign: 'center', cellWidth: 15, fontStyle: 'bold' }, // Status
-            8: { cellWidth: 55 }, // Remark Lebar
-            9: { halign: 'center', cellWidth: 21, fontStyle: 'bold' }  // SKALA
+            0: { halign: 'center', cellWidth: 10 },
+            1: { cellWidth: 52 },
+            2: { halign: 'center', cellWidth: 16 },
+            3: { halign: 'center', cellWidth: 14 },
+            4: { cellWidth: 48 }, // Corrective Action Lebar
+            5: { halign: 'center', cellWidth: 22 },
+            6: { halign: 'center', cellWidth: 16 },
+            7: { halign: 'center', cellWidth: 14, fontStyle: 'bold' }, // Status
+            8: { cellWidth: 48 }, // Remark Lebar
+            9: { halign: 'center', cellWidth: 18, fontStyle: 'bold' }, // Category
+            10: { halign: 'center', cellWidth: 19, fontStyle: 'bold' }  // SKALA
         },
         didParseCell: function (data) {
             if (data.section === 'body') {
                 // WARNAI KOLOM STATUS (Kolom ke-7) -> Biru Muda
                 if (data.column.index === 7) {
-                    data.cell.styles.fillColor = [0, 176, 240]; 
+                    data.cell.styles.fillColor = [0, 176, 240];
                 }
-                
-                // WARNAI KOLOM SKALA/PRIO (Kolom ke-9)
+
+                // WARNAI KOLOM CATEGORY (Kolom ke-9) -> Hijau Muda
                 if (data.column.index === 9) {
+                    data.cell.styles.fillColor = [220, 252, 231];
+                    data.cell.styles.textColor = [21, 128, 61];
+                }
+
+                // WARNAI KOLOM SKALA/PRIO (Kolom ke-10)
+                if (data.column.index === 10) {
                     const prioText = data.cell.raw.toString().toLowerCase();
                     if (prioText.includes('1') || prioText.includes('high')) {
                         // Prio 1 -> Background Merah Muda / Teks Merah
@@ -514,20 +553,9 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
             }
 
             // B. JIKA PDF BARU SUKSES DISIMPAN, KIRIM DATA KE BACKEND (NESTJS)
-            const apiUrl = 'http://192.168.100.205:3000';
-            // const apiUrl = 'http://localhost:3000'; 
-            const token = localStorage.getItem('access_token');
+            const archived = await archiveMOMRecord(archiveObject);
 
-            const serverResponse = await fetch(`${apiUrl}/arsip-mom`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` 
-                },
-                body: JSON.stringify(archiveObject) 
-            });
-
-            if (serverResponse.ok) {
+            if (archived) {
                 showCustomAlert("Success", "PDF exported & Archive successfully saved to server!");
             } else {
                 showCustomAlert("Warning", "PDF exported, but failed to save archive to server.");
@@ -540,26 +568,4 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
         console.error("System Error: ", err);
         showCustomAlert("Error", "A system error occurred while trying to export.");
     }
-}
-
-// =========================================================================
-// HELPER: MENGUBAH GAMBAR MENJADI BASE64 UNTUK JSPDF
-// =========================================================================
-function getBase64Image(imgPath) {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement("canvas");
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(img, 0, 0);
-            resolve(canvas.toDataURL("image/png"));
-        };
-        img.onerror = () => {
-            console.warn("Gagal memuat logo PDF, fallback ke teks.");
-            resolve(null);
-        };
-        img.src = imgPath;
-    });
 }

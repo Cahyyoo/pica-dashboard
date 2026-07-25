@@ -1,6 +1,6 @@
 // js/issue-detail.js
 import { API_URL } from './config.js';
-import { showView, getStatusBadge } from './utils.js';
+import { showView, getStatusBadge, formatWitaDate } from './utils.js';
 import { state } from './issue-state.js';
 
 export function openDetailView(id) {
@@ -28,7 +28,7 @@ export function openDetailView(id) {
     }
     
     document.getElementById('detail-title').innerText = issue.caseNotification;
-    document.getElementById('detail-created').innerText = new Date(issue.createdAt).toLocaleDateString('en-GB');
+    document.getElementById('detail-created').innerText = formatWitaDate(issue.createdAt);
 
     let issuerName = '-';
     if (issue.issuedBy) {
@@ -47,7 +47,7 @@ export function openDetailView(id) {
 
     const elDueDate = document.getElementById('detail-due-date');
     if (elDueDate) {
-        const dueDateText = issue.dueDate ? new Date(issue.dueDate).toLocaleDateString('en-GB') : '-';
+        const dueDateText = formatWitaDate(issue.dueDate);
         if (role === 'MD') {
             elDueDate.innerHTML = `<span style="cursor:pointer; color:#ef4444; border-bottom: 1px dashed #ef4444;" onclick="openDueDateModal(${issue.id}, '${issue.dueDate}')" title="Change Due Date">${dueDateText} ✏️</span>`;
         } else {
@@ -68,8 +68,19 @@ export function openDetailView(id) {
     }
 
     document.getElementById('detail-desc').innerText = issue.description || '-';
+    document.getElementById('detail-corrective-action').innerText = issue.correctiveAction || '-';
     document.getElementById('detail-status').innerHTML = getStatusBadge(issue.status);
     document.getElementById('detail-prio').innerHTML = `<span class="badge badge-prio">${issue.priority}</span>`;
+
+    const elCategory = document.getElementById('detail-category');
+    if (elCategory) {
+        const categoryText = issue.category || '-';
+        if (role === 'MD') {
+            elCategory.innerHTML = `<span style="cursor:pointer; color:#16a34a; border-bottom: 1px dashed #16a34a;" onclick="openCategoryModal(${issue.id}, '${issue.category || 'Daily'}')" title="Change Category">${categoryText} ✏️</span>`;
+        } else {
+            elCategory.innerText = categoryText;
+        }
+    }
 
     const currentUserId = Number(localStorage.getItem('user_id'));
 
@@ -95,8 +106,8 @@ export function openDetailView(id) {
         timelineContainer.innerHTML = `<div style="color:#9ca3af; font-size:13px; font-style:italic;">No actions have been taken yet.</div>`;
     } else {
         issue.histories.forEach((hist) => {
-            const updateStr = new Date(hist.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-            const remarkHTML = hist.remark ? `<p class="timeline-remark"><strong>Note:</strong> ${hist.remark}</p>` : '';
+            const updateStr = formatWitaDate(hist.createdAt, 'en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const remarkHTML = hist.remark ? `<p class="timeline-remark">${hist.remark}</p>` : `<p class="timeline-remark" style="color:#9ca3af; font-style:italic;">No additional remarks.</p>`;
             
             // --- UBAH LOGIKA TOMBOL LAMPIRAN DI SINI ---
             let attachmentHTML = '';
@@ -126,8 +137,7 @@ export function openDetailView(id) {
                         <span style="display:flex; gap:8px;">Update: ${getStatusBadge(hist.status)}</span>
                         <span style="color:#1591DC;">${updateStr}</span>
                     </div>
-                    <div class="timeline-box">
-                        <p class="timeline-action">${hist.correctiveAction || '-'}</p>
+                    <div class="">
                         ${remarkHTML}
                         ${attachmentHTML}
                     </div>

@@ -5,7 +5,8 @@ import {
     openDetailView, backFromDetail, openUpdateFromDetail, closeUpdateModal,
     submitUpdate, openPriorityModal, closePriorityModal, submitPriority, refreshDashboardMD, refreshDashboardPIC, applyFilterMD, changeMDPage, changeMDPageSize, filterUserHistory, filterPICHistory, openUserHistory, refreshUserHistory, exportSingleIssueToPDF, exportFilteredIssuesToPDF,
     openDueDateModal, closeDueDateModal, submitDueDate, checkDailyUpdates, openAttachmentModal, closeAttachmentModal, updateFileNameDisplay, openMOMModal, submitMOMExport, closeMOMModal, loadMOMArchives, viewMOMDetail, refreshMOMArchives, closeMOMDetail, downloadMOMArchive,
-    openEditAssignmentModal, closeEditAssignmentModal, submitEditAssignment
+    openEditAssignmentModal, closeEditAssignmentModal, submitEditAssignment,
+    openCategoryModal, closeCategoryModal, submitCategory
 } from './issues.js';
 import {
     loadAdminDepartments, submitNewDepartment, deleteDepartment,
@@ -51,6 +52,9 @@ window.submitUpdate = submitUpdate;
 window.openPriorityModal = openPriorityModal;
 window.closePriorityModal = closePriorityModal;
 window.submitPriority = submitPriority;
+window.openCategoryModal = openCategoryModal;
+window.closeCategoryModal = closeCategoryModal;
+window.submitCategory = submitCategory;
 
 window.submitNewDepartment = submitNewDepartment;
 window.openEditDeptModal = openEditDeptModal;

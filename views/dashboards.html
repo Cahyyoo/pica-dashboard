@@ -21,9 +21,26 @@
                 <input type="date" id="issue-due-date" required>
             </div>
 
+            <div class="form-group">
+                <label>Category <span style="color: #ef4444;">*</span></label>
+                <select id="issue-category" required>
+                    <option value="">-- Select Category --</option>
+                    <option value="Daily">Daily</option>
+                    <option value="Weekly">Weekly BOD</option>
+                    <option value="Midyear">Midyear</option>
+                    <option value="Annual">Annual</option>
+                </select>
+            </div>
+
             <div class="form-group form-full">
                 <label>Chronology Details / Issue Description <span style="color: #ef4444;">*</span></label>
                 <textarea id="issue-desc" placeholder="Explain the issue details found in the field..." rows="5"></textarea>
+            </div>
+
+            <div class="form-group form-full">
+                <label>Corrective Action <span style="color: #ef4444;">*</span></label>
+                <textarea id="issue-corrective-action" placeholder="Action taken/planned to resolve this issue..." rows="3"></textarea>
+                <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">* This can only be filled in now, when the report is first created — it cannot be edited later during progress updates.</div>
             </div>
 
             <div class="form-group form-full" style="display: none; margin-top: 8px; padding-top: 16px; border-top: 1px dashed #e5e7eb;">
@@ -145,6 +162,10 @@
                     <div id="detail-prio" style="margin-top: 6px;">-</div>
                 </div>
                 <div style="margin-bottom: 16px;">
+                    <span style="font-size: 12px; color: #6b7280;">Category:</span>
+                    <div id="detail-category" style="font-size: 14px; color: #111827; font-weight: 600; margin-top: 2px;">-</div>
+                </div>
+                <div style="margin-bottom: 16px;">
                     <span style="font-size: 12px; color: #6b7280;">Current Status:</span>
                     <div id="detail-status" style="margin-top: 6px;">-</div>
                 </div>
@@ -152,10 +173,14 @@
                     <span style="font-size: 12px; color: #6b7280;">Initial Description:</span>
                     <div id="detail-desc" style="font-size: 13px; color: #4b5563; line-height: 1.5; margin-top: 4px; background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb;">-</div>
                 </div>
+                <div style="margin-bottom: 16px;">
+                    <span style="font-size: 12px; color: #6b7280;">Corrective Action:</span>
+                    <div id="detail-corrective-action" style="font-size: 13px; color: #4b5563; line-height: 1.5; margin-top: 4px; background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb;">-</div>
+                </div>
             </div>
-            
+
             <div class="detail-right">
-                <h3 style="margin-top: 0; font-size: 14px; color: #111827; padding-bottom: 8px;">Progress & Corrective Action</h3>
+                <h3 style="margin-top: 0; font-size: 14px; color: #111827; padding-bottom: 8px;">Progress & Status History</h3>
                 <div class="timeline" id="detail-timeline"></div>
             </div>
         </div>
@@ -169,8 +194,9 @@
             <h2 style="margin: 0; font-size: 22px;">Monitoring Dashboard</h2>
             <div class="action-group" style="display: flex; gap: 10px;">
                 <button class="btn-sm" style="background-color: #10b981;" onclick="showView('view-user')">+ New Report</button>
-                <button class="btn-sm" style="background-color: #0ea5e9;" onclick="openImportModal()">📥 Import Excel</button>
-                <button class="btn-sm" style="background-color: #FF0000;" onclick="openMOMModal()">Export PDF</button>
+                <button class="btn-sm" style="background-color: #0ea5e9;" onclick="openImportModal()">Import Excel</button>
+                <button class="btn-sm" style="background-color: #FF0000;" onclick="openMOMModal('pdf')">Export PDF</button>
+                <button class="btn-sm" style="background-color: #16a34a;" onclick="openMOMModal('excel')">Export Excel</button>
                 <button class="btn-sm" onclick="refreshDashboardMD()">Refresh Data</button>
                 <button class="btn-secondary btn-sm" onclick="backToMenu()">Back to Menu</button>
             </div>
@@ -213,22 +239,34 @@
                     <option value="Prio 3">Priority 3</option>
                 </select>
             </div>
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 13px; color: #6b7280; font-weight: 500;">Category:</span>
+                <select id="filter-category-md" style="margin: 0; padding: 0 12px; font-size: 13px; border-radius: 8px; border: 1px solid #d1d5db; width: auto; height: 38px; box-sizing: border-box; cursor: pointer; color: #4b5563; outline: none; background-color: #fff;" onchange="applyFilterMD()">
+                    <option value="All">All Categories</option>
+                    <option value="Daily">Daily</option>
+                    <option value="Weekly">Weekly BOD</option>
+                    <option value="Midyear">Midyear</option>
+                    <option value="Annual">Annual</option>
+                </select>
+            </div>
         </div>
 
         <div class="table-container">
-            <table style="min-width: 1220px;">
+            <table style="min-width: 1120px;">
                 <thead>
                     <tr>
-                        <th style="text-align:center; width: 50px;">No</th>
+                        <th style="text-align:center; width: 40px;">No</th>
                         <th>Case/Notification</th>
-                        <th style="width: 120px;">Issued By</th>
-                        <th style="width: 110px;">Issued Date</th>
-                        <th style="width: 110px;">Due Date</th>
-                        <th style="width: 100px;">PIC</th>
-                        <th style="text-align:center; width: 90px;">Status</th>
-                        <th style="text-align:center; width: 110px;">Scale</th>
-                        <th style="text-align:center; width: 140px;">Today's Update</th>
-                        <th style="text-align:center; width: 110px;">Action</th>
+                        <th style="width: 95px;">Issued By</th>
+                        <th style="width: 90px;">Issued Date</th>
+                        <th style="width: 90px;">Due Date</th>
+                        <th style="width: 85px;">PIC</th>
+                        <th style="text-align:center; width: 75px;">Status</th>
+                        <th style="text-align:center; width: 90px;">Scale</th>
+                        <th style="text-align:center; width: 70px;">Category</th>
+                        <th style="text-align:center; width: 110px;">Today's Update</th>
+                        <th style="text-align:center; width: 95px;">Action</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -404,6 +442,7 @@
         
         <div style="padding: 16px 24px; border-top: 1px solid #e5e7eb; background: #ffffff; display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
             <button class="btn-secondary" onclick="closeMOMDetail()" style="width: auto; margin: 0; padding: 8px 20px; border-radius: 6px; border: 1px solid #d1d5db; background: white; color: #374151; cursor: pointer; font-weight: 600; outline: none; transition: 0.2s;" onmouseover="this.style.backgroundColor='#f9fafb'" onmouseout="this.style.backgroundColor='white'">Close View</button>
+            <button id="btn-redownload-excel" style="width: auto; margin: 0; padding: 8px 20px; border-radius: 6px; border: none; background: #16a34a; color: white; cursor: pointer; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); outline: none; transition: 0.2s;" onmouseover="this.style.backgroundColor='#15803d'" onmouseout="this.style.backgroundColor='#16a34a'">📊 Download Excel</button>
             <button id="btn-redownload" style="width: auto; margin: 0; padding: 8px 20px; border-radius: 6px; border: none; background: #10b981; color: white; cursor: pointer; font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); outline: none; transition: 0.2s;" onmouseover="this.style.backgroundColor='#059669'" onmouseout="this.style.backgroundColor='#10b981'">Download PDF</button>
         </div>
     </div>
