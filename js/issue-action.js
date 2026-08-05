@@ -1,9 +1,9 @@
 // js/issue-action.js
 import { API_URL, getAuthHeaders } from './config.js';
-import { showCustomAlert, showView, stripAutoForwardNotes } from './utils.js';
+import { showCustomAlert, showView, showCustomConfirm, stripAutoForwardNotes } from './utils.js';
 import { state } from './issue-state.js';
 import { loadDashboardMD, loadDashboardPIC } from './issue-dashboard.js';
-import { openDetailView } from './issue-detail.js';
+import { openDetailView, backFromDetail } from './issue-detail.js';
 
 export async function submitIssue() {
     const title = document.getElementById('issue-title').value;
@@ -206,13 +206,26 @@ export async function submitUpdate() {
 
     // Gabungkan poin-poin remark dinamis jadi satu teks bernomor, masing-masing dengan
     // tag status sendiri (In Progress/Closed) — terpisah dari status issue secara keseluruhan.
+    // WAJIB: minimal 1 poin terisi, dan tiap poin yang diisi minimal 10 karakter.
+    const MIN_REMARK_POINT_LENGTH = 10;
     const statusLabel = { Progress: 'In Progress', Closed: 'Closed' };
     const remarkPoints = [];
+    let hasTooShortPoint = false;
     document.querySelectorAll('#update-remark-points-container .remark-point-row').forEach(row => {
         const text = row.querySelector('.remark-point-text').value.trim();
         const pointStatus = row.querySelector('.remark-point-status').value;
-        if (text) remarkPoints.push(`[${statusLabel[pointStatus] || pointStatus}] ${text}`);
+        if (!text) return; // Baris kosong dilewati, tidak dianggap error
+        if (text.length < MIN_REMARK_POINT_LENGTH) { hasTooShortPoint = true; return; }
+        remarkPoints.push(`[${statusLabel[pointStatus] || pointStatus}] ${text}`);
     });
+
+    if (hasTooShortPoint) {
+        return showCustomAlert("Warning", `Each remark point must be at least ${MIN_REMARK_POINT_LENGTH} characters long.`);
+    }
+    if (remarkPoints.length === 0) {
+        return showCustomAlert("Warning", `Please fill in at least one remark point (minimum ${MIN_REMARK_POINT_LENGTH} characters) describing today's progress.`);
+    }
+
     let remark = remarkPoints.map((p, i) => `${i + 1}. ${p}`).join('\n');
 
     const selectPic = document.getElementById('update-pic');
@@ -460,4 +473,84 @@ export async function submitEditAssignment() {
     } catch (error) {
         showCustomAlert("Error", "Server error.");
     }
+}
+
+// =========================================================
+// FITUR EDIT ISSUE PENUH (KHUSUS MD) - Title, Description, Corrective Action
+// Field lain (Status, Priority, Category, Due Date, PIC/Issued By) sudah punya jalur edit
+// sendiri-sendiri, jadi sengaja tidak diulang di modal ini. Department TIDAK bisa diedit
+// karena tidak disimpan sebagai kolom di Issue -- cuma dipakai sesaat saat issue dibuat
+// untuk mencari PIC awal.
+// =========================================================
+export function openEditIssueModal() {
+    const issue = state.globalIssues.find(i => i.id === state.currentDetailId);
+    if (!issue) return;
+
+    document.getElementById('edit-issue-id').value = issue.id;
+    document.getElementById('edit-issue-title').value = issue.caseNotification || '';
+    document.getElementById('edit-issue-description').value = issue.description || '';
+    document.getElementById('edit-issue-corrective-action').value = issue.correctiveAction || '';
+    document.getElementById('modal-edit-issue').classList.add('show');
+}
+
+export function closeEditIssueModal() {
+    document.getElementById('modal-edit-issue').classList.remove('show');
+}
+
+export async function submitEditIssue() {
+    const id = document.getElementById('edit-issue-id').value;
+    const title = document.getElementById('edit-issue-title').value.trim();
+    const description = document.getElementById('edit-issue-description').value.trim();
+    const correctiveAction = document.getElementById('edit-issue-corrective-action').value.trim();
+
+    if (!title || !description || !correctiveAction) {
+        return showCustomAlert("Warning", "Title, Description, and Corrective Action cannot be empty!");
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/issue/${id}`, {
+            method: 'PATCH',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ title, description, correctiveAction })
+        });
+
+        if (response.ok) {
+            closeEditIssueModal();
+            showCustomAlert("Success", "Issue updated successfully!");
+            await loadDashboardMD();
+            openDetailView(Number(id));
+        } else {
+            showCustomAlert("Failed", "An error occurred while updating the issue.");
+        }
+    } catch (error) {
+        showCustomAlert("Error", "Server error.");
+    }
+}
+
+// =========================================================
+// FITUR HAPUS ISSUE (KHUSUS MD)
+// =========================================================
+export function confirmDeleteIssue() {
+    const issue = state.globalIssues.find(i => i.id === state.currentDetailId);
+    if (!issue) return;
+
+    const message = `Are you sure you want to permanently delete this issue?\n\n"${issue.caseNotification}"\n\nThis action cannot be undone — all progress history will be deleted as well.`;
+    showCustomConfirm("Delete Issue", message, async () => {
+        try {
+            const response = await fetch(`${API_URL}/issue/${issue.id}`, {
+                method: 'DELETE',
+                headers: getAuthHeaders()
+            });
+
+            if (response.ok) {
+                showCustomAlert("Success", "Issue has been permanently deleted.");
+                await loadDashboardMD();
+                backFromDetail();
+            } else {
+                showCustomAlert("Failed", "An error occurred while deleting the issue.");
+            }
+        } catch (error) {
+            showCustomAlert("Error", "Server error.");
+        }
+    });
 }

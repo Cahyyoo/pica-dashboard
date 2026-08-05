@@ -427,14 +427,13 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
         // Corrective Action sekarang diisi sekali di awal (saat issue dibuat), bukan per-history lagi.
         const correctiveActions = (item.correctiveAction || item.description || '-').replace(/[^\x20-\x7E\n]/g, '');
 
+        // Remark cuma menampilkan update PALING AKHIR (bukan gabungan seluruh riwayat) — riwayat
+        // lengkapnya tetap bisa dilihat di timeline "Progress & Status History" halaman detail issue.
         let remarks = "-";
         if (item.histories && item.histories.length > 0) {
-            const validRemarks = item.histories
-                .map(h => stripAutoForwardNotes(h.remark))
-                .filter(Boolean);
-            if (validRemarks.length > 0) {
-                remarks = validRemarks.map((r, i) => `${i + 1}. ${r.replace(/[^\x20-\x7E\n]/g, '')}`).join('\n');
-            }
+            const latestHistory = [...item.histories].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+            const cleanedRemark = stripAutoForwardNotes(latestHistory.remark);
+            if (cleanedRemark) remarks = cleanedRemark.replace(/[^\x20-\x7E\n]/g, '');
         }
 
         return [

@@ -94,8 +94,17 @@ export function openDetailView(id) {
         btnUpdate.style.display = (isMD || isOwnerDeptHead) ? 'block' : 'none';
     }
 
-    const btnExport = document.getElementById('btn-detail-export');
-    if (btnExport) btnExport.style.display = (role === 'MD') ? 'block' : 'none';
+    // (id yang benar adalah 'btn-export-single' -- sebelumnya salah tulis 'btn-detail-export'
+    // sehingga toggle visibility ini tidak pernah berjalan sama sekali)
+    const btnExport = document.getElementById('btn-export-single');
+    if (btnExport) btnExport.style.display = (role === 'MD' || role === 'KTT') ? 'block' : 'none';
+
+    // Edit & Delete Issue: khusus MD
+    const btnEdit = document.getElementById('btn-detail-edit');
+    if (btnEdit) btnEdit.style.display = (role === 'MD') ? 'block' : 'none';
+
+    const btnDelete = document.getElementById('btn-detail-delete');
+    if (btnDelete) btnDelete.style.display = (role === 'MD') ? 'block' : 'none';
 
     // =========================================================
     // RENDER TIMELINE & TOMBOL ATTACHMENT (LAMPIRAN FILE)

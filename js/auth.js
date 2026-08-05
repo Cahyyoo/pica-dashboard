@@ -1,23 +1,48 @@
 import { API_URL, getAuthHeaders } from './config.js';
-import { showCustomAlert, navigateToRole, showCustomConfirm } from './utils.js';
-import { checkDailyUpdates } from './issues.js'; 
+import { showCustomAlert, navigateToRole, showCustomConfirm, formatWitaDate, formatWitaDateTime } from './utils.js';
+import { checkDailyUpdates } from './issues.js';
+import { state } from './issue-state.js';
 // -------------------------------------------
+
+// Catat "app dibuka" — dipanggil setiap kali user benar-benar mulai memakai aplikasi,
+// baik lewat login manual ('login') maupun lewat sesi tersimpan yang auto-resume tanpa
+// perlu isi username/password lagi ('auto-resume'). Best-effort: tidak pernah menghalangi
+// alur login/navigasi walau requestnya gagal (mis. backend sedang tidak bisa diakses).
+export function trackAppOpen(source) {
+    const userId = localStorage.getItem('user_id');
+    if (!userId) return;
+
+    fetch(`${API_URL}/auth/track-open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, source })
+    }).catch((error) => {
+        console.warn('Gagal mencatat app dibuka:', error);
+    });
+}
 
 export async function handleLogin() {
     const inputUser = document.getElementById('username').value;
     const inputPass = document.getElementById('password').value;
+    const btnLogin = document.querySelector('.btn-login-main');
 
     if (!inputUser || !inputPass) return showCustomAlert("Warning", "Username and Password cannot be empty!");
 
+    // Cegah submit dobel (double-click, atau Enter + klik) yang bisa mengirim request login
+    // berkali-kali sebelum request sebelumnya selesai.
+    if (btnLogin.disabled) return;
+
     try {
-        document.querySelector('.btn-login-main').innerText = "Processing...";
+        btnLogin.disabled = true;
+        btnLogin.innerText = "Processing...";
         const response = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: inputUser, password: inputPass })
         });
         const data = await response.json();
-        document.querySelector('.btn-login-main').innerText = "Sign In";
+        btnLogin.innerText = "Sign In";
+        btnLogin.disabled = false;
 
         if (response.ok) {
             // --- PEMBUATAN SESI PERMANEN ---
@@ -25,9 +50,11 @@ export async function handleLogin() {
             localStorage.setItem('user_role', data.role);
             localStorage.setItem('user_id', data.id);
             localStorage.setItem('username', inputUser);             
-            localStorage.setItem('user_dept', data.department || ''); 
+            localStorage.setItem('user_dept', data.department || '');
             // -------------------------------
-            
+
+            trackAppOpen('login');
+
             document.getElementById('username').value = '';
             document.getElementById('password').value = '';
             navigateToRole(data.role);
@@ -36,7 +63,8 @@ export async function handleLogin() {
         }
     } catch (error) {
         showCustomAlert("Server Error", "Cannot connect to the backend server.");
-        document.querySelector('.btn-login-main').innerText = "Sign In";
+        btnLogin.innerText = "Sign In";
+        btnLogin.disabled = false;
     }
 }
 
@@ -201,5 +229,77 @@ export async function submitEditUser() {
     } catch (error) {
         showCustomAlert("Error", "Failed to connect to backend server.");
         document.querySelector('button[onclick="submitEditUser()"]').innerText = "Save Changes";
+    }
+}
+
+// ==========================================
+// LAPORAN JAM LOGIN USER (KHUSUS MD) — mencatat SETIAP kali user login,
+// supaya MD bisa melihat jam berapa tiap user login setiap harinya.
+// ==========================================
+export async function loadLoginLogs() {
+    try {
+        const res = await fetch(`${API_URL}/auth/login-logs`);
+        state.loginLogs = await res.json();
+        renderLoginLogsTable();
+    } catch (error) {
+        console.error("Failed to load login logs:", error);
+    }
+}
+
+function renderLoginLogsTable() {
+    const tbody = document.querySelector('#view-login-logs tbody');
+    if (!tbody) return;
+
+    const searchFilter = (document.getElementById('search-login-logs')?.value || '').toLowerCase();
+    const dateFilter = document.getElementById('filter-date-login-logs')?.value || '';
+
+    const filtered = (state.loginLogs || []).filter(log => {
+        const username = (log.user && log.user.username) || '';
+        const matchSearch = username.toLowerCase().includes(searchFilter);
+        // Bandingkan tanggal WITA (bukan tanggal UTC mentah), supaya filter tanggal sesuai
+        // dengan apa yang ditampilkan ke user (formatWitaDate juga pakai timezone WITA).
+        const matchDate = !dateFilter || formatWitaDate(log.loggedInAt, 'en-CA') === dateFilter;
+        return matchSearch && matchDate;
+    });
+
+    const countEl = document.getElementById('login-logs-total-count');
+    if (countEl) countEl.innerText = filtered.length;
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #6b7280; padding: 24px;">No login activity found.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map((log, index) => {
+        const username = (log.user && log.user.username) || 'Unknown';
+        const roleName = (log.user && log.user.role && log.user.role.name) || '-';
+        const isAutoResume = log.source === 'auto-resume';
+        const typeBadge = isAutoResume
+            ? '<span class="badge" style="background:#e0f2fe; color:#0369a1;">Auto-Resume</span>'
+            : '<span class="badge" style="background:#dcfce7; color:#15803d;">Login</span>';
+        return `<tr>
+            <td style="text-align: center;">${index + 1}</td>
+            <td style="font-weight: 500;">${username}</td>
+            <td>${roleName}</td>
+            <td>${formatWitaDate(log.loggedInAt)}</td>
+            <td style="text-align: center;">${formatWitaDateTime(log.loggedInAt, 'en-GB', { hour: '2-digit', minute: '2-digit' })}</td>
+            <td style="text-align: center;">${typeBadge}</td>
+        </tr>`;
+    }).join('');
+}
+
+export function filterLoginLogs() {
+    renderLoginLogsTable();
+}
+
+export async function refreshLoginLogs() {
+    try {
+        const btnRefresh = document.querySelector('#view-login-logs button[onclick="refreshLoginLogs()"]');
+        if (btnRefresh) btnRefresh.innerText = "Refreshing...";
+        await loadLoginLogs();
+        if (btnRefresh) btnRefresh.innerText = "Refresh Data";
+        showCustomAlert("Success", "Login activity data has been successfully refreshed!");
+    } catch (error) {
+        showCustomAlert("Error", "Failed to refresh login activity data.");
     }
 }

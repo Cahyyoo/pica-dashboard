@@ -130,8 +130,10 @@
                     <span id="detail-page-info" style="font-size: 13px; color: #4b5563; font-weight: 600; min-width: 50px; text-align: center;">1 / 1</span>
                     <button id="btn-next-issue" class="btn-secondary btn-sm" onclick="navigateIssue(1)" style="margin: 0; padding: 4px 10px; font-weight: bold; font-size: 14px;" title="Next Issue">&gt;</button>
                 </div>
-                <button id="btn-export-single" class="btn-sm" style="background-color: #FF0000;" onclick="exportSingleIssueToPDF()">Export to PDF</button> 
+                <button id="btn-export-single" class="btn-sm" style="background-color: #FF0000;" onclick="exportSingleIssueToPDF()">Export to PDF</button>
                 <button id="btn-detail-update" class="btn-sm" style="display: none;" onclick="openUpdateFromDetail()">+ Update Progress</button>
+                <button id="btn-detail-edit" class="btn-sm btn-secondary" style="display: none;" onclick="openEditIssueModal()">✏️ Edit Issue</button>
+                <button id="btn-detail-delete" class="btn-sm btn-danger" style="display: none;" onclick="confirmDeleteIssue()">🗑️ Delete</button>
                 <button class="btn-secondary btn-sm" onclick="backFromDetail()" style="padding: 10px 20px;">Back</button>
             </div>
         </div>
@@ -369,6 +371,43 @@
                 </table>
             </div>
         </div>
+    </div>
+</div>
+
+<div id="view-login-logs" class="screen">
+    <div class="card card-wide" style="max-width: 1000px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px;">
+            <h2 style="margin: 0; font-size: 22px;">User Login Activity</h2>
+            <div class="action-group" style="display: flex; gap: 10px;">
+                <button class="btn-sm" onclick="refreshLoginLogs()">Refresh Data</button>
+                <button class="btn-secondary btn-sm" onclick="backToMenu()">Back to Menu</button>
+            </div>
+        </div>
+
+        <div style="background-color: #f8fafc; padding: 16px 20px; border-radius: 12px; border: 1px solid #e5e7eb; display: flex; gap: 16px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
+            <input type="text" id="search-login-logs" class="search-input" placeholder="🔍 Search username..." oninput="filterLoginLogs()" style="flex-grow: 1; min-width: 200px; margin: 0; height: 38px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 13px; color: #6b7280; font-weight: 500;">Date:</span>
+                <input type="date" id="filter-date-login-logs" style="margin: 0; padding: 0 12px; font-size: 13px; border-radius: 8px; border: 1px solid #d1d5db; height: 38px; box-sizing: border-box;" onchange="filterLoginLogs()">
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table style="min-width: 700px;">
+                <thead>
+                    <tr>
+                        <th style="text-align:center; width: 50px;">No</th>
+                        <th>Username</th>
+                        <th style="width: 130px;">Role</th>
+                        <th style="width: 140px;">Date</th>
+                        <th style="width: 100px; text-align:center;">Time</th>
+                        <th style="width: 120px; text-align:center;">Type</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="table-footer">Showing <strong id="login-logs-total-count">0</strong> login event(s)</div>
     </div>
 </div>
 

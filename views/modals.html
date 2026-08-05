@@ -227,6 +227,28 @@
     </div>
 </div>
 
+<div id="modal-edit-issue" class="modal-overlay">
+    <div class="modal-box" style="width: 500px; text-align: left;">
+        <h3 style="margin-top: 0; color: #111827;">Edit Issue</h3>
+        <p class="subtitle" style="margin-bottom: 15px;">Correct the title, description, or corrective action of this issue. Department and PIC/Issued By assignment are edited separately.</p>
+        <input type="hidden" id="edit-issue-id">
+
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Title / Case Notification:</label>
+        <input type="text" id="edit-issue-title" style="margin-top: 4px; margin-bottom: 12px;">
+
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Chronology Details / Description:</label>
+        <textarea id="edit-issue-description" rows="4" style="margin-top: 4px; margin-bottom: 12px;"></textarea>
+
+        <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Corrective Action:</label>
+        <textarea id="edit-issue-corrective-action" rows="3" style="margin-top: 4px;"></textarea>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+            <button onclick="submitEditIssue()">Save Changes</button>
+            <button class="btn-secondary" onclick="closeEditIssueModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
 <div id="modal-attachment" class="modal-overlay">
     <div class="modal-box" style="width: 85%; max-width: 900px; height: 85vh; display: flex; flex-direction: column; padding: 20px;">
         

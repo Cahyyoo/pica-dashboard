@@ -359,30 +359,94 @@ export function filterUserHistory() {
 // ==========================================
 // FITUR SEARCH UNTUK PIC (DEPT HEAD)
 // ==========================================
-export function filterPICHistory() {
+// Urutan section Category di Task List Dept Head — kategori lain (di luar 4 ini, kalau ada
+// data lama yang aneh) ditaruh di akhir, diurutkan alfabetis.
+const PIC_CATEGORY_ORDER = ['Daily', 'Weekly', 'Midyear', 'Annual'];
+
+// Render tabel Task List Dept Head, DIKELOMPOKKAN per Category (bukan satu daftar campur
+// seperti sebelumnya) — tiap kategori dapat baris judul section sendiri yang jelas terpisah.
+// Dipakai bareng oleh loadDashboardPIC() (load awal) dan filterPICHistory() (pencarian),
+// supaya logika pengelompokannya tidak dobel-tulis di dua tempat.
+function renderPICTable(issues) {
     const tbody = document.querySelector('#view-pic-update tbody');
     if (!tbody) return;
-    
+
+    state.currentIssueIds = issues.map(i => i.id);
+
+    const picTotalCount = document.getElementById('pic-total-count');
+    if (picTotalCount) picTotalCount.innerText = issues.length;
+
+    if (issues.length === 0) {
+        tbody.innerHTML = `
+            <tr><td colspan="7" style="text-align: center; padding: 48px 24px; background-color: #f9fafb; border-bottom: 1px solid #e5e7eb;">
+                    <div style="color: #6b7280; font-size: 15px; font-weight: 500;">No Tasks Found</div>
+                    <div style="color: #9ca3af; font-size: 13px; margin-top: 4px; font-style: italic;">You're all caught up! There are no tasks matching the current view.</div>
+            </td></tr>`;
+        return;
+    }
+
+    // 1. Kelompokkan berdasarkan Category
+    const grouped = {};
+    issues.forEach(item => {
+        const cat = item.category || 'Uncategorized';
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(item);
+    });
+
+    // 2. Urutkan section: Daily/Weekly/Midyear/Annual dulu, sisanya alfabetis di akhir
+    const knownCats = PIC_CATEGORY_ORDER.filter(c => grouped[c]);
+    const otherCats = Object.keys(grouped).filter(c => !PIC_CATEGORY_ORDER.includes(c)).sort();
+    const orderedCats = [...knownCats, ...otherCats];
+
+    let html = '';
+    let runningIndex = 0;
+    orderedCats.forEach(cat => {
+        html += `<tr class="category-group-header">
+            <td colspan="7" style="background:#f0fdf4; border-top: 2px solid #16a34a; border-bottom: 1px solid #bbf7d0; padding: 10px 16px; font-weight: 700; font-size: 12px; color: #15803d; text-transform: uppercase; letter-spacing: 0.5px;">
+                ${cat} <span style="font-weight: 500; color: #4b5563; text-transform: none; letter-spacing: normal;">(${grouped[cat].length} task${grouped[cat].length === 1 ? '' : 's'})</span>
+            </td>
+        </tr>`;
+
+        grouped[cat].forEach(item => {
+            runningIndex++;
+            const dueDateStr = formatWitaDate(item.dueDate);
+            const prioBadge = `<span class="badge badge-prio">${item.priority}</span>`;
+
+            html += `<tr>
+                <td style="text-align: center;">${runningIndex}</td>
+                <td>${item.caseNotification}</td> <td>${dueDateStr}</td>
+                <td style="text-align: center;">${prioBadge}</td>
+                <td style="text-align: center;">${getStatusBadge(item.status)}</td>
+                <td style="text-align: center;">${getDailyUpdateBadge(item)}</td>
+                <td style="text-align: center;"><button class="btn-sm" onclick="openDetailView(${item.id})">View Details</button></td>
+            </tr>`;
+        });
+    });
+
+    tbody.innerHTML = html;
+}
+
+export function filterPICHistory() {
     const searchFilter = document.getElementById('search-pic').value.toLowerCase();
     const currentUserId = String(localStorage.getItem('user_id'));
-    
+
     const filteredIssues = state.globalIssues.filter(item => {
         // Hapus variabel isNotClosed di sini juga
         const isCurrentPic = (String(item.picId) === currentUserId);
-        
+
         let isPastPic = false;
         if (item.involvedPicIds) {
             const historyArray = item.involvedPicIds.split(',');
             isPastPic = historyArray.includes(currentUserId);
         }
-        
+
         // Ubah baris ini
         const isMyTask = (isCurrentPic || isPastPic);
-        
+
         const safeTitle = (item.caseNotification || '').toLowerCase();
         const safeId = String(item.id || '').toLowerCase();
         const matchSearch = safeTitle.includes(searchFilter) || safeId.includes(searchFilter);
-                            
+
         return isMyTask && matchSearch;
     });
 
@@ -390,60 +454,34 @@ export function filterPICHistory() {
     filteredIssues.sort((a, b) => {
         const weightA = statusOrder[a.status] || 4;
         const weightB = statusOrder[b.status] || 4;
-        
+
         if (weightA !== weightB) {
             return weightA - weightB;
         }
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
-    state.currentIssueIds = filteredIssues.map(i => i.id);
-
-    const picTotalCount = document.getElementById('pic-total-count');
-    if (picTotalCount) picTotalCount.innerText = filteredIssues.length;
-
-    tbody.innerHTML = '';
-    if (filteredIssues.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #6b7280; padding: 24px;">No data found matching the selected filters.</td></tr>`;
-        return;
-    }
-
-    filteredIssues.forEach((item, index) => {
-        const dueDateStr = formatWitaDate(item.dueDate);
-        const prioBadge = `<span class="badge badge-prio">${item.priority}</span>`;
-
-        tbody.innerHTML += `<tr>
-            <td style="text-align: center;">${index + 1}</td>
-            <td>${item.caseNotification}</td> <td>${dueDateStr}</td>
-            <td style="text-align: center;">${prioBadge}</td>
-            <td style="text-align: center;">${getStatusBadge(item.status)}</td>
-            <td style="text-align: center;">${getDailyUpdateBadge(item)}</td>
-            <td style="text-align: center;"><button class="btn-sm" onclick="openDetailView(${item.id})">View Details</button></td>
-        </tr>`;
-    });
+    renderPICTable(filteredIssues);
 }
 
 export async function loadDashboardPIC() {
     try {
-        await fetchUsersForMapping(); 
+        await fetchUsersForMapping();
         const res = await fetch(`${API_URL}/issue`);
-        state.globalIssues = await res.json(); 
-        const tbody = document.querySelector('#view-pic-update tbody');
-        if (!tbody) return;
-        tbody.innerHTML = ''; 
-        
+        state.globalIssues = await res.json();
+
         const currentUserId = String(localStorage.getItem('user_id'));
 
         const activeIssues = state.globalIssues.filter(i => {
             // Hapus atau abaikan variabel isNotClosed
             const isCurrentPic = (String(i.picId) === currentUserId);
-            
+
             let isPastPic = false;
             if (i.involvedPicIds) {
                 const historyArray = i.involvedPicIds.split(',');
                 isPastPic = historyArray.includes(currentUserId);
             }
-            
+
             // Ubah baris return ini (hilangkan isNotClosed)
             return (isCurrentPic || isPastPic);
         });
@@ -452,43 +490,17 @@ export async function loadDashboardPIC() {
         activeIssues.sort((a, b) => {
             const weightA = statusOrder[a.status] || 4;
             const weightB = statusOrder[b.status] || 4;
-            
+
             // 1. Urutkan berdasarkan Status
             if (weightA !== weightB) {
                 return weightA - weightB;
             }
-            
+
             // 2. Jika status sama, urutkan berdasarkan Tanggal Terbaru
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         });
 
-        state.currentIssueIds = activeIssues.map(i => i.id);
-
-        const picTotalCount = document.getElementById('pic-total-count');
-        if (picTotalCount) picTotalCount.innerText = activeIssues.length;
-
-        if (activeIssues.length === 0) {
-            tbody.innerHTML = `
-                <tr><td colspan="7" style="text-align: center; padding: 48px 24px; background-color: #f9fafb; border-bottom: 1px solid #e5e7eb;">
-                        <div style="color: #6b7280; font-size: 15px; font-weight: 500;">No Tasks Assigned</div>
-                        <div style="color: #9ca3af; font-size: 13px; margin-top: 4px; font-style: italic;">You're all caught up! There are no active issues assigned to you at the moment.</div>
-                </td></tr>`;
-            return;
-        }
-
-        activeIssues.forEach((item, index) => {
-            const dueDateStr = formatWitaDate(item.dueDate);
-            const prioBadge = `<span class="badge badge-prio">${item.priority}</span>`;
-
-            tbody.innerHTML += `<tr>
-                <td style="text-align: center;">${index + 1}</td>
-                <td>${item.caseNotification}</td> <td>${dueDateStr}</td>
-                <td style="text-align: center;">${prioBadge}</td>
-                <td style="text-align: center;">${getStatusBadge(item.status)}</td>
-                <td style="text-align: center;">${getDailyUpdateBadge(item)}</td>
-                <td style="text-align: center;"><button class="btn-sm" onclick="openDetailView(${item.id})">View Details</button></td>
-            </tr>`;
-        });
+        renderPICTable(activeIssues);
     } catch (error) { console.error("Failed to load PIC dashboard:", error); }
 }
 
@@ -503,8 +515,8 @@ export async function loadMOMArchives() {
 
     try {
         // Sesuaikan dengan port backend NestJS Anda (biasanya 3000)
-        const apiUrl = 'http://192.168.100.205:3000';
-        // const apiUrl = 'http://localhost:3008';
+        // const apiUrl = 'http://192.168.100.205:3000';
+        const apiUrl = 'http://localhost:3000';
         const token = localStorage.getItem('access_token');
 
         // Panggil endpoint GET dari backend NestJS

@@ -1,12 +1,13 @@
 import { showView, showCustomAlert, closeCustomAlert, navigateToRole, loadComponent, showCustomConfirm, closeCustomConfirm } from './utils.js';
-import { handleLogin, handleLogout, handleExitApp, loadAdminUsers, submitNewUser, deleteUser, openEditUserModal, closeEditUserModal, submitEditUser } from './auth.js';
+import { handleLogin, handleLogout, handleExitApp, loadAdminUsers, submitNewUser, deleteUser, openEditUserModal, closeEditUserModal, submitEditUser, loadLoginLogs, filterLoginLogs, refreshLoginLogs, trackAppOpen } from './auth.js';
 import {
     loadDepartments, submitIssue, loadDashboardMD, loadDashboardPIC,
     openDetailView, backFromDetail, openUpdateFromDetail, closeUpdateModal,
     submitUpdate, openPriorityModal, closePriorityModal, submitPriority, refreshDashboardMD, refreshDashboardPIC, applyFilterMD, changeMDPage, changeMDPageSize, filterUserHistory, filterPICHistory, openUserHistory, refreshUserHistory, exportSingleIssueToPDF, exportFilteredIssuesToPDF,
     openDueDateModal, closeDueDateModal, submitDueDate, checkDailyUpdates, openAttachmentModal, closeAttachmentModal, updateFileNameDisplay, openMOMModal, submitMOMExport, closeMOMModal, loadMOMArchives, viewMOMDetail, refreshMOMArchives, closeMOMDetail, downloadMOMArchive,
     openEditAssignmentModal, closeEditAssignmentModal, submitEditAssignment,
-    openCategoryModal, closeCategoryModal, submitCategory
+    openCategoryModal, closeCategoryModal, submitCategory,
+    openEditIssueModal, closeEditIssueModal, submitEditIssue, confirmDeleteIssue
 } from './issues.js';
 import {
     loadAdminDepartments, submitNewDepartment, deleteDepartment,
@@ -24,6 +25,7 @@ window.showView = (viewId) => {
     else if (viewId === 'view-admin') loadAdminUsers();
     else if (viewId === 'view-manage-dept') loadAdminDepartments();
     else if (viewId === 'view-mom-archive') loadMOMArchives();
+    else if (viewId === 'view-login-logs') loadLoginLogs();
 };
 
 
@@ -40,6 +42,8 @@ window.deleteUser = deleteUser;
 window.openEditUserModal = openEditUserModal;
 window.closeEditUserModal = closeEditUserModal;
 window.submitEditUser = submitEditUser;
+window.filterLoginLogs = filterLoginLogs;
+window.refreshLoginLogs = refreshLoginLogs;
 
 window.submitIssue = submitIssue;
 window.openUserHistory = openUserHistory;
@@ -55,6 +59,10 @@ window.submitPriority = submitPriority;
 window.openCategoryModal = openCategoryModal;
 window.closeCategoryModal = closeCategoryModal;
 window.submitCategory = submitCategory;
+window.openEditIssueModal = openEditIssueModal;
+window.closeEditIssueModal = closeEditIssueModal;
+window.submitEditIssue = submitEditIssue;
+window.confirmDeleteIssue = confirmDeleteIssue;
 
 window.submitNewDepartment = submitNewDepartment;
 window.openEditDeptModal = openEditDeptModal;
@@ -134,6 +142,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('issue-issuer').value = `${savedUsername} (ID: ${savedUserId})`;
         }
         // -------------------------------------------------------------
+
+        // App dibuka lewat sesi tersimpan (tidak perlu login ulang) — tetap dicatat sebagai
+        // "app dibuka" supaya laporan Login Activity mencerminkan pemakaian app yang sebenarnya.
+        trackAppOpen('auto-resume');
 
         navigateToRole(savedRole);
     } else {

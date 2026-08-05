@@ -8,5 +8,6 @@ export const state = {
     cachedMOMArchives : [],
     mdFilteredIssues: [],
     mdCurrentPage: 1,
-    importRows: []
+    importRows: [],
+    loginLogs: []
 };
