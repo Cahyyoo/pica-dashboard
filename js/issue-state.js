@@ -9,5 +9,6 @@ export const state = {
     mdFilteredIssues: [],
     mdCurrentPage: 1,
     importRows: [],
-    loginLogs: []
+    loginLogs: [],
+    departments: []
 };

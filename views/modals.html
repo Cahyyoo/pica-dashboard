@@ -5,7 +5,7 @@
         <input type="hidden" id="update-id">
 
         <label style="font-size: 13px; font-weight: 500; color: #4b5563;">Current Status:</label>
-        <select id="update-status" style="margin-top: 4px;">
+        <select id="update-status" style="margin-top: 4px;" onchange="toggleEvidenceHint()">
             <option value="Open">Open</option>
             <option value="Progress">In Progress</option>
             <option value="Closed">Closed (Resolved)</option>
@@ -25,8 +25,9 @@
         </div>
 
         <div class="form-group" style="margin-top: 16px;">
-            <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Upload Documentation (Optional)</label>
-            
+            <label style="font-size: 13px; font-weight: 600; color: #4b5563;">Upload Documentation</label>
+            <small id="update-evidence-hint" style="display:none; color:#b45309; font-size: 11px;">Required when closing this issue.</small>
+
             <div class="file-upload-wrapper" id="upload-wrapper" style="min-height: 130px; position: relative; padding: 16px; box-sizing: border-box;">
                 
                 <div id="upload-content-default" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; pointer-events: none;">

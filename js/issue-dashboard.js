@@ -515,8 +515,8 @@ export async function loadMOMArchives() {
 
     try {
         // Sesuaikan dengan port backend NestJS Anda (biasanya 3000)
-        // const apiUrl = 'http://192.168.100.205:3000';
-        const apiUrl = 'http://localhost:3000';
+        const apiUrl = 'http://192.168.100.205:3000';
+        // const apiUrl = 'http://localhost:3000';
         const token = localStorage.getItem('access_token');
 
         // Panggil endpoint GET dari backend NestJS

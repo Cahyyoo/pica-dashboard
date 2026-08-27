@@ -1,5 +1,5 @@
 import { showView, showCustomAlert, closeCustomAlert, navigateToRole, loadComponent, showCustomConfirm, closeCustomConfirm } from './utils.js';
-import { handleLogin, handleLogout, handleExitApp, loadAdminUsers, submitNewUser, deleteUser, openEditUserModal, closeEditUserModal, submitEditUser, loadLoginLogs, filterLoginLogs, refreshLoginLogs, trackAppOpen } from './auth.js';
+import { handleLogin, handleLogout, handleExitApp, loadAdminUsers, submitNewUser, deleteUser, openEditUserModal, closeEditUserModal, submitEditUser, loadLoginLogs, filterLoginLogs, refreshLoginLogs, trackAppOpen, isGuestLockedNow } from './auth.js';
 import {
     loadDepartments, submitIssue, loadDashboardMD, loadDashboardPIC,
     openDetailView, backFromDetail, openUpdateFromDetail, closeUpdateModal,
@@ -7,7 +7,8 @@ import {
     openDueDateModal, closeDueDateModal, submitDueDate, checkDailyUpdates, openAttachmentModal, closeAttachmentModal, updateFileNameDisplay, openMOMModal, submitMOMExport, closeMOMModal, loadMOMArchives, viewMOMDetail, refreshMOMArchives, closeMOMDetail, downloadMOMArchive,
     openEditAssignmentModal, closeEditAssignmentModal, submitEditAssignment,
     openCategoryModal, closeCategoryModal, submitCategory,
-    openEditIssueModal, closeEditIssueModal, submitEditIssue, confirmDeleteIssue
+    openEditIssueModal, closeEditIssueModal, submitEditIssue, confirmDeleteIssue,
+    toggleEvidenceHint
 } from './issues.js';
 import {
     loadAdminDepartments, submitNewDepartment, deleteDepartment,
@@ -52,6 +53,7 @@ window.openDetailView = openDetailView;
 window.backFromDetail = backFromDetail;
 window.openUpdateFromDetail = openUpdateFromDetail;
 window.closeUpdateModal = closeUpdateModal;
+window.toggleEvidenceHint = toggleEvidenceHint;
 window.submitUpdate = submitUpdate;
 window.openPriorityModal = openPriorityModal;
 window.closePriorityModal = closePriorityModal;
@@ -113,6 +115,23 @@ window.viewMOMDetail = viewMOMDetail;
 window.closeMOMDetail = closeMOMDetail;
 window.downloadMOMArchive = downloadMOMArchive;
 
+// Tampilkan/sembunyikan banner "Guest Network Mode" -- dipakai baik saat load awal maupun
+// saat status lock berubah DI TENGAH SESI (lewat event 'guest-lock-status-changed' dari main.js).
+const GUEST_LOCK_BANNER_ID = 'guest-lock-banner';
+function updateGuestLockBanner(locked) {
+    const existing = document.getElementById(GUEST_LOCK_BANNER_ID);
+    if (locked) {
+        if (existing) return; // sudah tampil, tidak perlu diulang
+        document.body.insertAdjacentHTML('afterbegin', `
+            <div id="${GUEST_LOCK_BANNER_ID}" style="position:sticky; top:0; z-index:9999; background:#fef3c7; color:#92400e; padding:8px; text-align:center; font-size:13px; font-weight:600;">
+                ⚠️ Guest Network Mode — No backend connection. Exit App and Logout are disabled until connected to the office network.
+            </div>
+        `);
+    } else if (existing) {
+        existing.remove();
+    }
+}
+
 // 2. Jalankan logika awal saat aplikasi dibuka
 document.addEventListener('DOMContentLoaded', async () => {
     
@@ -125,8 +144,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // TAHAP B: JALANKAN LOGIKA DATA SETELAH HTML SIAP
     // Karena HTML sudah terbentuk, JS kini bisa menemukan elemen seperti 'issue-dept'
-    loadDepartments(); 
-    
+    loadDepartments();
+
+    // Mode Guest terkunci (SSID SPRM-GUEST, backend tak terjangkau): tampilkan banner
+    // peringatan persisten. Ini murni indikator visual -- penegakan sebenarnya (Exit App
+    // & Logout ditolak) ada di js/auth.js dan main.js, jadi kegagalan cek ini tidak fatal.
+    // Reaktif terhadap perubahan status DI TENGAH SESI (lihat listener 'guest-lock-status-changed'
+    // di bawah) -- bukan cuma dicek sekali saat startup, karena jaringan bisa berpindah kapan saja.
+    isGuestLockedNow().then(locked => updateGuestLockBanner(locked));
+
     const savedToken = localStorage.getItem('access_token');
     const savedRole = localStorage.getItem('user_role');
     
@@ -248,6 +274,31 @@ try {
     });
 } catch (error) {
     console.warn("Sensor Wake-Up hanya berjalan di environment Electron.");
+}
+
+// =========================================================
+// FITUR MODE GUEST TERKUNCI: REAKSI TERHADAP PERUBAHAN JARINGAN DI TENGAH SESI
+// (bukan cuma dicek sekali saat startup -- lihat startRuntimeNetworkMonitor() di main.js)
+// =========================================================
+try {
+    const { ipcRenderer } = window.require('electron');
+
+    ipcRenderer.on('guest-lock-status-changed', (event, locked) => {
+        updateGuestLockBanner(locked);
+        if (locked) {
+            showCustomAlert(
+                "Locked",
+                "WiFi switched to Guest network — no backend access. Exit App and Logout are now disabled."
+            );
+        } else {
+            showCustomAlert(
+                "Unlocked",
+                "Backend connection restored — Exit App and Logout are enabled again."
+            );
+        }
+    });
+} catch (error) {
+    console.warn("Sensor Guest Lock hanya berjalan di environment Electron.");
 }
 
 // =========================================================

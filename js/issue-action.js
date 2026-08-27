@@ -170,7 +170,16 @@ export function openUpdateModal(issue) {
         });
         selectPic.innerHTML = options;
     }
+    toggleEvidenceHint();
     document.getElementById('modal-update').classList.add('show');
+}
+
+// Tampilkan/sembunyikan hint "wajib lampirkan file" sesuai status yang dipilih di modal Update.
+export function toggleEvidenceHint() {
+    const statusEl = document.getElementById('update-status');
+    const hintEl = document.getElementById('update-evidence-hint');
+    if (!statusEl || !hintEl) return;
+    hintEl.style.display = (statusEl.value === 'Closed') ? 'block' : 'none';
 }
 
 export function closeUpdateModal() {
@@ -226,6 +235,12 @@ export async function submitUpdate() {
         return showCustomAlert("Warning", `Please fill in at least one remark point (minimum ${MIN_REMARK_POINT_LENGTH} characters) describing today's progress.`);
     }
 
+    // Menutup issue (Closed) wajib disertai bukti (gambar/PDF) sebagai jejak verifikasi.
+    const fileInput = document.getElementById('update-evidence');
+    if (status === 'Closed' && (!fileInput || fileInput.files.length === 0)) {
+        return showCustomAlert("Warning", "Please attach at least one evidence file (image or PDF) before closing this issue.");
+    }
+
     let remark = remarkPoints.map((p, i) => `${i + 1}. ${p}`).join('\n');
 
     const selectPic = document.getElementById('update-pic');
@@ -244,7 +259,6 @@ export async function submitUpdate() {
     if (newPicId) formData.append('picId', newPicId);
     
     // 2. Tangkap elemen input file dan lakukan looping untuk memasukkan SEMUA file
-    const fileInput = document.getElementById('update-evidence');
     if (fileInput && fileInput.files.length > 0) {
         for (let i = 0; i < fileInput.files.length; i++) {
             formData.append('evidence', fileInput.files[i]); 

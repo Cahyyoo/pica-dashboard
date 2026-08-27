@@ -1,6 +1,6 @@
 import { API_URL, getAuthHeaders } from './config.js';
 import { showCustomAlert, navigateToRole, showCustomConfirm, formatWitaDate, formatWitaDateTime } from './utils.js';
-import { checkDailyUpdates } from './issues.js';
+import { checkDailyUpdates, fetchUsersForMapping } from './issues.js';
 import { state } from './issue-state.js';
 // -------------------------------------------
 
@@ -19,6 +19,19 @@ export function trackAppOpen(source) {
     }).catch((error) => {
         console.warn('Gagal mencatat app dibuka:', error);
     });
+}
+
+// Cek ke main process apakah app sedang berjalan dalam mode "Guest terkunci" (SSID
+// SPRM-GUEST, backend tak terjangkau). Selalu dicek ulang (bukan di-cache) karena murni
+// IPC lokal tanpa I/O, dan tidak pernah lock kalau bukan berjalan di dalam Electron
+// (mis. saat testing di browser biasa).
+export async function isGuestLockedNow() {
+    try {
+        const { ipcRenderer } = window.require('electron');
+        return await ipcRenderer.invoke('cek-status-lock');
+    } catch (e) {
+        return false;
+    }
 }
 
 export async function handleLogin() {
@@ -72,6 +85,14 @@ export async function handleLogin() {
 // 1. TOMBOL LOGOUT: Menghapus Sesi & Kembali ke Layar Login
 // ====================================================================
 export async function handleLogout() {
+    // Mode Guest terkunci: Logout dinonaktifkan total sampai app di-restart di jaringan yang benar.
+    if (await isGuestLockedNow()) {
+        return showCustomAlert(
+            "Locked",
+            "This device is running in Guest network mode with no backend access. Logout and Exit App are disabled — please restart the app once connected to the office network."
+        );
+    }
+
     // Validasi Gembok Harian
     const canExit = await checkDailyUpdates();
     if (!canExit) {
@@ -92,6 +113,14 @@ export async function handleLogout() {
 // 2. TOMBOL EXIT APP: Mematikan Aplikasi Kiosk (Sesi Tetap Tersimpan)
 // ====================================================================
 export async function handleExitApp() {
+    // Mode Guest terkunci: Exit App dinonaktifkan total sampai app di-restart di jaringan yang benar.
+    if (await isGuestLockedNow()) {
+        return showCustomAlert(
+            "Locked",
+            "This device is running in Guest network mode with no backend access. Logout and Exit App are disabled — please restart the app once connected to the office network."
+        );
+    }
+
     // Validasi Gembok Harian
     const canExit = await checkDailyUpdates();
     if (!canExit) {
@@ -241,8 +270,61 @@ export async function loadLoginLogs() {
         const res = await fetch(`${API_URL}/auth/login-logs`);
         state.loginLogs = await res.json();
         renderLoginLogsTable();
+        await renderDeptsNotLoggedInPanel();
     } catch (error) {
         console.error("Failed to load login logs:", error);
+    }
+}
+
+// ==========================================
+// PANEL "DEPARTEMEN BELUM LOGIN HARI INI" — ringkasan cepat untuk MD, terpisah dari
+// filter tanggal tabel di bawahnya (panel ini SELALU mengacu ke tanggal WITA hari ini,
+// bukan tanggal yang sedang difilter user).
+// ==========================================
+async function renderDeptsNotLoggedInPanel() {
+    const container = document.getElementById('login-logs-dept-alert');
+    if (!container) return;
+
+    try {
+        // state.globalUsers tidak otomatis terisi kalau MD langsung buka Login Activity
+        // tanpa pernah membuka MD Dashboard dulu -- jadi selalu panggil ulang di sini.
+        await fetchUsersForMapping();
+
+        const deptRes = await fetch(`${API_URL}/department`);
+        state.departments = deptRes.ok ? await deptRes.json() : [];
+
+        const todayWita = formatWitaDate(new Date(), 'en-CA');
+
+        const deptsWithUsers = new Set(
+            (state.globalUsers || []).filter(u => u.department).map(u => u.department)
+        );
+        const deptsLoggedInToday = new Set(
+            (state.loginLogs || [])
+                .filter(log => log.user?.department && formatWitaDate(log.loggedInAt, 'en-CA') === todayWita)
+                .map(log => log.user.department)
+        );
+
+        const notLoggedInToday = state.departments.filter(d => deptsWithUsers.has(d.name) && !deptsLoggedInToday.has(d.name));
+        const deptsWithNoUsers = state.departments.filter(d => !deptsWithUsers.has(d.name));
+
+        let html = '';
+        if (notLoggedInToday.length === 0) {
+            html += `<div style="background:#dcfce7; color:#15803d; border-radius:8px; padding:10px 14px; font-size:13px; font-weight:500;">✅ All departments with a Dept Head have logged in today.</div>`;
+        } else {
+            const chips = notLoggedInToday.map(d => `<span class="badge" style="background:#fef3c7; color:#92400e;">${d.name}</span>`).join(' ');
+            html += `<div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:10px 14px;">
+                <div style="font-size:13px; font-weight:600; color:#92400e; margin-bottom:6px;">⚠️ Not logged in today (${notLoggedInToday.length}):</div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">${chips}</div>
+            </div>`;
+        }
+        if (deptsWithNoUsers.length > 0) {
+            html += `<div style="font-size:11px; color:#9ca3af; margin-top:6px; font-style:italic;">${deptsWithNoUsers.length} department(s) have no Dept Head assigned yet: ${deptsWithNoUsers.map(d => d.name).join(', ')}</div>`;
+        }
+
+        container.innerHTML = html;
+    } catch (error) {
+        console.error("Failed to render depts-not-logged-in panel:", error);
+        container.innerHTML = '';
     }
 }
 
