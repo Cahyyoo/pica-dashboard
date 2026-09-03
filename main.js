@@ -185,7 +185,9 @@ function createWindow () {
 function startRuntimeNetworkMonitor() {
   if (runtimeNetworkMonitor) return; // sudah jalan, jangan didobelkan
   runtimeNetworkMonitor = setInterval(async () => {
-    const [reachable, ssid] = await Promise.all([checkServerConnection(), getCurrentSSID()]);
+    const [reachable, ssid, officeWifiNearby] = await Promise.all([
+      checkServerConnection(), getCurrentSSID(), isOfficeWifiNearby(),
+    ]);
     let changed = false;
 
     if (reachable && isGuestLocked) {
@@ -193,14 +195,17 @@ function startRuntimeNetworkMonitor() {
       isGuestLocked = false;
       changed = true;
       log.info('Backend terjangkau lagi -- mode Guest terkunci otomatis dilepas.');
-    } else if (!reachable && ssid === 'SPRM-GUEST' && !isGuestLocked) {
-      // WiFi berpindah ke SPRM-GUEST saat app sudah berjalan -- kunci Exit App & Logout.
+    } else if (!reachable && (ssid === 'SPRM-GUEST' || officeWifiNearby) && !isGuestLocked) {
+      // WiFi berpindah ke SPRM-GUEST, ATAU device tetap di sekitar kantor tapi tersambung
+      // ke jaringan lain (mis. hotspot HP) -- kunci Exit App & Logout.
       isGuestLocked = true;
       changed = true;
-      log.info('WiFi berpindah ke SPRM-GUEST saat app berjalan -- Exit App/Logout dikunci.');
+      log.info(ssid === 'SPRM-GUEST'
+        ? 'WiFi berpindah ke SPRM-GUEST saat app berjalan -- Exit App/Logout dikunci.'
+        : 'WiFi kantor terdeteksi di sekitar tapi tidak tersambung -- Exit App/Logout dikunci.');
     }
-    // Kondisi lain (unreachable & SSID selain SPRM-GUEST, mis. WiFi terputus sementara)
-    // sengaja TIDAK mengubah status lock -- di luar cakupan fitur ini.
+    // Kondisi lain (unreachable, SSID lain, DAN tidak ada WiFi kantor yang terlihat) sengaja
+    // TIDAK mengubah status lock -- di luar cakupan fitur ini.
 
     if (changed && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('guest-lock-status-changed', isGuestLocked);
@@ -400,6 +405,8 @@ function checkServerConnection() {
     });
 }
 
+const OFFICE_SSIDS = ['SPRM-MGT', 'SPRM-GUEST', 'SPRM-CCTV', 'SPRM-CORP'];
+
 // Baca SSID WiFi yang sedang aktif (Windows) lewat `netsh wlan show interfaces`.
 // Dipakai khusus untuk mendeteksi SSID "SPRM-GUEST" (jaringan tamu yang memang tidak
 // pernah bisa menjangkau backend internal) supaya app tetap dibuka dalam mode terkunci,
@@ -422,6 +429,25 @@ function getCurrentSSID() {
             });
         } catch (e) {
             resolve(null);
+        }
+    });
+}
+
+// Cek apakah salah satu SSID kantor TERLIHAT di sekitar (hasil scan `netsh wlan show
+// networks`), TERLEPAS dari SSID mana yang sedang tersambung. Beda dengan getCurrentSSID()
+// yang cuma lihat koneksi aktif -- ini menjawab "apakah device secara fisik ada di kantor",
+// walau lagi connect ke jaringan lain (mis. hotspot HP). Dipakai supaya app tetap dibuka
+// (mode Guest terkunci) dalam skenario itu, bukan menghilang selamanya seperti sebelumnya.
+// Tidak pernah throw -- kegagalan apapun aman jatuh ke false.
+function isOfficeWifiNearby() {
+    return new Promise((resolve) => {
+        try {
+            execFile('netsh', ['wlan', 'show', 'networks'], { timeout: 5000 }, (err, stdout) => {
+                if (err || !stdout) return resolve(false);
+                resolve(OFFICE_SSIDS.some(name => stdout.includes(name)));
+            });
+        } catch (e) {
+            resolve(false);
         }
     });
 }
@@ -460,10 +486,11 @@ if (!gotTheLock) {
     // 2. MULAI PENGECEKAN UPDATE OTOMATIS DARI GITHUB RELEASES
     if (app.isPackaged) setupAutoUpdater();
 
-    // 3. CEK KONEKSI PERTAMA KALI SAAT LAPTOP MENYALA (SSID dicek paralel, sekali saja saat boot)
-    const [isConnectedToOffice, ssid] = await Promise.all([
+    // 3. CEK KONEKSI PERTAMA KALI SAAT LAPTOP MENYALA (SSID + scan WiFi sekitar dicek paralel, sekali saja saat boot)
+    const [isConnectedToOffice, ssid, officeWifiNearby] = await Promise.all([
         checkServerConnection(),
         getCurrentSSID(),
+        isOfficeWifiNearby(),
     ]);
 
     if (isConnectedToOffice) {
@@ -475,6 +502,13 @@ if (!gotTheLock) {
         // app-nya (walau datanya kosong karena tak ada backend), tapi kunci Exit App &
         // Logout sepenuhnya sampai app di-restart di jaringan yang benar.
         console.log("Terhubung ke SPRM-GUEST (backend tak terjangkau dari SSID ini). Membuka dalam mode Guest terkunci...");
+        isGuestLocked = true;
+        createWindow();
+    } else if (officeWifiNearby) {
+        // WiFi kantor TERLIHAT di sekitar (device secara fisik ada di kantor), tapi lagi
+        // tersambung ke jaringan lain (mis. hotspot HP) sehingga backend tak terjangkau --
+        // tetap buka app dalam mode Guest terkunci, bukan menghilang selamanya.
+        console.log("WiFi kantor terdeteksi di sekitar, tapi device tersambung ke jaringan lain sehingga backend tak terjangkau. Membuka dalam mode Guest terkunci...");
         isGuestLocked = true;
         createWindow();
     } else {
