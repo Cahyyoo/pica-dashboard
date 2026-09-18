@@ -1,11 +1,12 @@
 {
   "name": "pica-system",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "Aplikasi PICA Dashboard",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --publish always"
+    "build": "electron-builder --publish always",
+    "build:local": "electron-builder --publish never"
   },
   "keywords": [],
   "author": "",
@@ -27,9 +28,37 @@
     "type": "git",
     "url": "https://github.com/Cahyyoo/pica-dashboard.git"
   },
+  "//build.files": [
+    "Catatan untuk blok build.files di bawah. Ditaruh di level ATAS, bukan di dalam `build`:",
+    "npm mengabaikan kunci yang diawali `//`, tapi electron-builder memvalidasi isi `build`",
+    "dengan additionalProperties:false -- kunci komentar di sana membuat build GAGAL TOTAL",
+    "sebelum membangun apa pun.",
+    "",
+    "Tanpa daftar `files`, electron-builder memakai default: seluruh isi folder proyek plus",
+    "semua dependencies beserta dep transitifnya masuk ke app.asar -- terukur 87,64 MB,",
+    "padahal kode aplikasi sendiri di bawah 1 MB. Isi terbesarnya ~43,6 MB berkas *.map yang",
+    "tidak pernah dibaca di produksi.",
+    "",
+    "Pengecualiannya sengaja KONSERVATIF: hanya berkas yang pasti tidak pernah dieksekusi.",
+    "Varian dist jspdf yang tidak terpakai (es/node/umd non-min) sengaja TIDAK dikecualikan",
+    "supaya resolusi modul tidak berubah diam-diam."
+  ],
   "build": {
     "appId": "com.pica.system",
     "productName": "Pica System",
+    "files": [
+      "**/*",
+      "!**/*.map",
+      "!**/*.md",
+      "!**/*.ts",
+      "!**/*.flow",
+      "!package-lock.json",
+      "!dist/**",
+      "!.vscode/**",
+      "!.github/**",
+      "!**/{.eslintrc,.eslintrc.js,.eslintrc.json,.babelrc,.editorconfig,.gitattributes,.npmignore,.travis.yml}",
+      "!**/{test,tests,__tests__,example,examples,docs,doc}/**"
+    ],
     "win": {
       "target": [
         "nsis"

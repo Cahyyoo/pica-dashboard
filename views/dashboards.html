@@ -1,44 +1,49 @@
 <div id="view-user" class="screen">
-    <div class="card card-wide" style="max-width: 800px; text-align: left;">
+    <div class="card card-wide card-grow" style="max-width: 800px; text-align: left;">
         <h2 style="margin-bottom: 4px;">Create Issue Report</h2>
         <p class="subtitle" style="margin-bottom: 24px;">Fill in the specific details of the issue below.</p>
         
         <div class="form-grid">
             <div class="form-group form-full">
-                <label>Title / Case Notification <span style="color: #ef4444;">*</span></label>
+                <label>Title / Case Notification <span class="u-bahaya">*</span></label>
                 <input type="text" id="issue-title" placeholder="Example: Lights out in the 2nd-floor corridor" autocomplete="off" required>
             </div>
 
-            <div class="form-group">
-                <label>Target Department <span style="color: #ef4444;">*</span></label>
-                <select id="issue-dept" required>
-                    <option value="">-- Select Department --</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label>Target Due Date <span style="color: #ef4444;">*</span></label>
-                <input type="date" id="issue-due-date" required>
-            </div>
+            <!-- Tiga isian pendek dirapatkan jadi satu baris lewat .form-trio. Sebelumnya
+                 Department & Due Date berbagi satu baris dan Category turun sendirian,
+                 menyisakan sel kosong menganga di sebelah kanannya. -->
+            <div class="form-trio">
+                <div class="form-group">
+                    <label>Target Department <span class="u-bahaya">*</span></label>
+                    <select id="issue-dept" required>
+                        <option value="">-- Select Department --</option>
+                    </select>
+                </div>
 
-            <div class="form-group">
-                <label>Category <span style="color: #ef4444;">*</span></label>
-                <select id="issue-category" required>
-                    <option value="">-- Select Category --</option>
-                    <option value="Daily">Daily</option>
-                    <option value="Weekly">Weekly BOD</option>
-                    <option value="Midyear">Midyear</option>
-                    <option value="Annual">Annual</option>
-                </select>
+                <div class="form-group">
+                    <label>Category <span class="u-bahaya">*</span></label>
+                    <select id="issue-category" required>
+                        <option value="">-- Select Category --</option>
+                        <option value="Daily">Daily</option>
+                        <option value="Weekly">Weekly BOD</option>
+                        <option value="Midyear">Midyear</option>
+                        <option value="Annual">Annual</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Target Due Date <span class="u-bahaya">*</span></label>
+                    <input type="date" id="issue-due-date" required>
+                </div>
             </div>
 
             <div class="form-group form-full">
-                <label>Chronology Details / Issue Description <span style="color: #ef4444;">*</span></label>
+                <label>Chronology Details / Issue Description <span class="u-bahaya">*</span></label>
                 <textarea id="issue-desc" placeholder="Explain the issue details found in the field..." rows="5"></textarea>
             </div>
 
             <div class="form-group form-full">
-                <label>Corrective Action <span style="color: #ef4444;">*</span></label>
+                <label>Corrective Action <span class="u-bahaya">*</span></label>
                 <textarea id="issue-corrective-action" placeholder="Action taken/planned to resolve this issue..." rows="3"></textarea>
                 <div style="font-size: 11px; color: #9ca3af; margin-top: 4px;">* This can only be filled in now, when the report is first created — it cannot be edited later during progress updates.</div>
             </div>
@@ -50,20 +55,19 @@
             </div>
         </div>
 
-        <div style="display: flex; gap: 12px; justify-content: flex-end; border-top: 1px solid #e5e7eb; padding-top: 20px; margin-top: 16px;">
+        <div class="form-actions">
             <button class="btn-secondary" onclick="backToMenu()" style="width: auto; margin: 0;">Cancel & Return</button>
-            <button onclick="submitIssue()" style="width: auto; margin: 0; padding: 12px 32px;">Submit PICA Report</button>
+            <button id="btn-submit-issue" onclick="submitIssue()" style="width: auto; margin: 0; padding: 12px 32px;">Submit PICA Report</button>
         </div>
     </div>
 </div>
 
 <div id="view-user-history" class="screen">
-    <div class="card card-wide" style="max-width: 1000px;">
+    <div class="card card-wide u-mw-1000">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <h2 style="margin: 0;">My Report History</h2>
-            <div style="display: flex; gap: 10px;">
-                <input type="text" id="search-user" class="search-input" placeholder="🔍 Search issue, PIC, or ID..." oninput="filterUserHistory()">
-                <button class="btn-sm" style="background-color: #FF0000;" onclick="exportFilteredIssuesToPDF('User')">Export PDF</button>
+            <h2 class="u-m0">My Report History</h2>
+            <div class="u-baris">
+                <input type="text" id="search-user" class="search-input" placeholder="🔍 Search issue, PIC, or ID..." oninput="filterUserHistoryDebounced()">
                 <button class="btn-sm" onclick="refreshUserHistory()">Refresh Data</button>
                 <button class="btn-secondary btn-sm" onclick="backToMenu()">Back to Menu</button>
             </div>
@@ -87,27 +91,41 @@
 </div>
 
 <div id="view-pic-update" class="screen">
-    <div class="card card-wide" style="max-width: 1000px;"> 
+    <!-- 1200px: delapan kolom muat tanpa menyesakkan judul issue. Kolom-kolomnya juga
+         dirapatkan mengikuti proporsi tabel MD (yang memuat 11 kolom dalam 1120px),
+         sehingga judul issue justru mendapat ruang hampir dua kali lipat dari sebelumnya. -->
+    <div class="card card-wide" style="max-width: 1200px;"> 
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-            <h2 style="margin: 0;">Task List</h2>
-            <div style="display: flex; gap: 10px;">
-                <input type="text" id="search-pic" class="search-input" placeholder="🔍 Search issue, PIC, or ID..." oninput="filterPICHistory()">
-                <button class="btn-sm" style="background-color: #FF0000;" onclick="exportFilteredIssuesToPDF('PIC')">Export PDF</button>
+            <!-- Judulnya diisi perbaruiJudulPic() dengan nama kategori yang sedang dibuka,
+                 supaya PIC tidak kehilangan konteks setelah melewati layar kategori. -->
+            <h2 class="u-m0" id="pic-list-title">Task List</h2>
+            <div class="u-baris">
+                <input type="text" id="search-pic" class="search-input" placeholder="🔍 Search issue, PIC, or ID..." oninput="filterPICHistoryDebounced()">
                 <button class="btn-sm" onclick="refreshDashboardPIC()">Refresh Data</button>
-                <button class="btn-secondary btn-sm" onclick="showView('view-dept-head')">Back to Menu</button>
+                <button class="btn-secondary btn-sm" onclick="showView('view-pic-category')">Back to Categories</button>
             </div>
         </div>
-        <div class="table-container">
-            <table style="min-width: 900px;">
+        <!-- Di LUAR .table-container, jadi tidak pernah ikut tergulir hilang. Ini satu-satunya
+             tempat jumlah tunggakan selalu terlihat, berapa pun panjang daftarnya. -->
+        <div id="pic-alert-belum" class="pic-alert pic-alert-aman"></div>
+        <!-- table-container-fill: tabel tumbuh mengikuti tinggi layar, sama seperti Monitoring
+             Dashboard MD. Tanpa ini wadahnya dipatok min(45vh,360px) -- di kiosk 1366x768 hanya
+             memuat 4 baris, sementara ~40% layar bawah dibiarkan kosong. -->
+        <div class="table-container table-container-fill">
+            <table style="min-width: 1120px;">
                 <thead>
                     <tr>
-                        <th style="text-align: center; width: 50px;">No</th>
+                        <th style="text-align: center; width: 40px;">No</th>
                         <th>Case Notification</th>
-                        <th style="width: 120px;">Due Date</th>
-                        <th style="text-align: center; width: 120px;">Priority</th>
-                        <th style="text-align: center; width: 100px;">Status</th>
-                        <th style="text-align: center; width: 140px;">Today's Update</th>
-                        <th style="text-align: center; width: 120px;">Action</th>
+                        <th style="width: 95px;">Due Date</th>
+                        <th style="text-align: center; width: 90px;">Priority</th>
+                        <th style="text-align: center; width: 85px;">Status</th>
+                        <th style="text-align: center; width: 95px;">Category</th>
+                        <!-- Badge per baris: baris tetap menjelaskan dirinya sendiri walau
+                             beberapa blok dibuka sekaligus, dan tetap benar di blok Arsip
+                             yang isinya campuran Closed dan tugas yang sudah dioper. -->
+                        <th style="text-align: center; width: 115px;">Today's Update</th>
+                        <th style="text-align: center; width: 105px;">Action</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -118,13 +136,13 @@
 </div>
 
 <div id="view-issue-detail" class="screen">
-    <div class="card card-wide" style="max-width: 1000px;">
+    <div class="card card-wide u-mw-1000">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f0f0f0; padding-bottom: 16px;">
             <div>
                 <h2 style="margin: 0; color: #111827; text-align: left; font-size: 22px;">PICA Detail History</h2>
                 <div id="detail-title" style="color: #4b5563; font-size: 15px; margin-top: 5px; text-align: left; font-weight: 500;">-</div>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div class="u-baris">
                 <div style="display: flex; align-items: center; gap: 5px; background: #f9fafb; padding: 4px; border-radius: 8px; border: 1px solid #e5e7eb; margin-right: 10px;">
                     <button id="btn-prev-issue" class="btn-secondary btn-sm" onclick="navigateIssue(-1)" style="margin: 0; padding: 4px 10px; font-weight: bold; font-size: 14px;" title="Previous Issue">&lt;</button>
                     <span id="detail-page-info" style="font-size: 13px; color: #4b5563; font-weight: 600; min-width: 50px; text-align: center;">1 / 1</span>
@@ -142,41 +160,41 @@
             <div class="detail-left">
                 <h3 style="margin-top: 0; font-size: 14px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px;">Main Information</h3>
                 
-                <div style="margin-bottom: 16px;">
-                    <span style="font-size: 12px; color: #6b7280;">Report Date:</span>
+                <div class="u-mb-4">
+                    <span class="u-petunjuk">Report Date:</span>
                     <div id="detail-created" style="font-size: 14px; color: #111827; font-weight: 500; margin-top: 2px;">-</div>
                 </div>
                 
-                <div style="margin-bottom: 16px;">
-                    <span style="font-size: 12px; color: #6b7280;">Issued By (Reporter):</span>
+                <div class="u-mb-4">
+                    <span class="u-petunjuk">Issued By (Reporter):</span>
                     <div id="detail-issuer" style="font-size: 14px; color: #1591DC; font-weight: 600; margin-top: 2px;">-</div>
                 </div>
-                <div style="margin-bottom: 16px;">
-                    <span style="font-size: 12px; color: #6b7280;">Target Due Date:</span>
+                <div class="u-mb-4">
+                    <span class="u-petunjuk">Target Due Date:</span>
                     <div id="detail-due-date" style="font-size: 14px; color: #ef4444; font-weight: 600; margin-top: 2px;">-</div>
                 </div>
-                <div style="margin-bottom: 16px;">
-                    <span style="font-size: 12px; color: #6b7280;">PIC (Person In Charge):</span>
+                <div class="u-mb-4">
+                    <span class="u-petunjuk">PIC (Person In Charge):</span>
                     <div id="detail-pic" style="font-size: 14px; color: #111827; font-weight: 500; margin-top: 2px;">-</div>
                 </div>
-                <div style="margin-bottom: 16px;">
-                    <span style="font-size: 12px; color: #6b7280;">Priority Scale:</span>
-                    <div id="detail-prio" style="margin-top: 6px;">-</div>
+                <div class="u-mb-4">
+                    <span class="u-petunjuk">Priority Scale:</span>
+                    <div class="u-mt-6" id="detail-prio">-</div>
                 </div>
-                <div style="margin-bottom: 16px;">
-                    <span style="font-size: 12px; color: #6b7280;">Category:</span>
+                <div class="u-mb-4">
+                    <span class="u-petunjuk">Category:</span>
                     <div id="detail-category" style="font-size: 14px; color: #111827; font-weight: 600; margin-top: 2px;">-</div>
                 </div>
-                <div style="margin-bottom: 16px;">
-                    <span style="font-size: 12px; color: #6b7280;">Current Status:</span>
-                    <div id="detail-status" style="margin-top: 6px;">-</div>
+                <div class="u-mb-4">
+                    <span class="u-petunjuk">Current Status:</span>
+                    <div class="u-mt-6" id="detail-status">-</div>
                 </div>
-                <div style="margin-bottom: 16px;">
-                    <span style="font-size: 12px; color: #6b7280;">Initial Description:</span>
+                <div class="u-mb-4">
+                    <span class="u-petunjuk">Initial Description:</span>
                     <div id="detail-desc" style="font-size: 13px; color: #4b5563; line-height: 1.5; margin-top: 4px; background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb;">-</div>
                 </div>
-                <div style="margin-bottom: 16px;">
-                    <span style="font-size: 12px; color: #6b7280;">Corrective Action:</span>
+                <div class="u-mb-4">
+                    <span class="u-petunjuk">Corrective Action:</span>
                     <div id="detail-corrective-action" style="font-size: 13px; color: #4b5563; line-height: 1.5; margin-top: 4px; background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb;">-</div>
                 </div>
             </div>
@@ -192,9 +210,9 @@
 <div id="view-md" class="screen">
     <div class="card card-wide">
 
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px;">
+        <div class="md-toolbar">
             <h2 style="margin: 0; font-size: 22px;">Monitoring Dashboard</h2>
-            <div class="action-group" style="display: flex; gap: 10px;">
+            <div class="action-group u-baris">
                 <button class="btn-sm" style="background-color: #10b981;" onclick="showView('view-user')">+ New Report</button>
                 <button class="btn-sm" style="background-color: #0ea5e9;" onclick="openImportModal()">Import Excel</button>
                 <button class="btn-sm" style="background-color: #FF0000;" onclick="openMOMModal('pdf')">Export PDF</button>
@@ -204,36 +222,43 @@
             </div>
         </div>
 
-        <div style="background-color: #f8fafc; padding: 16px 20px; border-radius: 12px; border: 1px solid #e5e7eb; display: flex; gap: 24px; align-items: center; margin-bottom: 24px; flex-wrap: wrap;">
+        <!-- Satu baris, dijamin: .md-filterbar memakai flex-wrap: nowrap dan kotak
+             pencarian dibuat bisa menyusut (.filt-cari). Keduanya harus ada -- nowrap saja
+             akan meluber, dan kotak pencarian yang menolak menyusut itulah yang dulu
+             melempar Category ke baris kedua.
+             Gaya inline yang tadinya berulang (5 label & 3 select identik) diangkat ke
+             kelas .filt-* supaya lebarnya bisa disetel dari satu tempat. -->
+        <div class="md-filterbar">
 
-            <div style="flex-grow: 1; min-width: 250px;">
-                <input type="text" id="search-md" class="search-input" placeholder="🔍 Search issue, PIC, or ID..." oninput="applyFilterMD()" style="width: 100%; margin: 0; height: 38px;">
+            <div class="filt-cari">
+                <input type="text" id="search-md" class="search-input" placeholder="🔍 Search issue, PIC, or ID..." oninput="applyFilterMDDebounced()">
             </div>
 
-            <div style="width: 1px; height: 32px; background-color: #e5e7eb; display: block;"></div>
-
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 13px; color: #6b7280; font-weight: 500;">Date Range:</span>
-                <div style="display: flex; gap: 8px; align-items: center; background: #ffffff; padding: 0 12px; border-radius: 8px; border: 1px solid #d1d5db; height: 38px; box-sizing: border-box; transition: 0.2s;">
-                    <input type="date" id="filter-date-start-md" style="margin: 0; padding: 0; font-size: 13px; border: none; outline: none; color: #4b5563; background: transparent; cursor: pointer;" onchange="applyFilterMD()" title="Start Date">
-                    <span style="font-size: 14px; color: #9ca3af;">-</span>
-                    <input type="date" id="filter-date-end-md" style="margin: 0; padding: 0; font-size: 13px; border: none; outline: none; color: #4b5563; background: transparent; cursor: pointer;" onchange="applyFilterMD()" title="End Date">
+            <div class="filt-grup">
+                <!-- "Date Range:" dipendekkan: dua kotak tanggal dengan tanda pisah di
+                     antaranya sudah menjelaskan dirinya sendiri. -->
+                <span class="filt-label">Date:</span>
+                <div class="filt-datebox">
+                    <input type="date" id="filter-date-start-md" class="filt-date" onchange="applyFilterMD()" title="Start Date">
+                    <span class="filt-sep">-</span>
+                    <input type="date" id="filter-date-end-md" class="filt-date" onchange="applyFilterMD()" title="End Date">
                 </div>
             </div>
-            
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 13px; color: #6b7280; font-weight: 500;">Status:</span>
-                <select id="filter-status-md" style="margin: 0; padding: 0 12px; font-size: 13px; border-radius: 8px; border: 1px solid #d1d5db; width: auto; height: 38px; box-sizing: border-box; cursor: pointer; color: #4b5563; outline: none; background-color: #fff;" onchange="applyFilterMD()">
+
+            <div class="filt-grup">
+                <span class="filt-label">Status:</span>
+                <select id="filter-status-md" class="filt-select" onchange="applyFilterMD()">
                     <option value="All">All Status</option>
                     <option value="Open">Open</option>
                     <option value="Progress">In Progress</option>
+                    <option value="Continue">Continue</option>
                     <option value="Closed">Closed</option>
                 </select>
             </div>
-            
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 13px; color: #6b7280; font-weight: 500;">Priority:</span>
-                <select id="filter-scale-md" style="margin: 0; padding: 0 12px; font-size: 13px; border-radius: 8px; border: 1px solid #d1d5db; width: auto; height: 38px; box-sizing: border-box; cursor: pointer; color: #4b5563; outline: none; background-color: #fff;" onchange="applyFilterMD()">
+
+            <div class="filt-grup">
+                <span class="filt-label">Priority:</span>
+                <select id="filter-scale-md" class="filt-select" onchange="applyFilterMD()">
                     <option value="All">All Priorities</option>
                     <option value="Pending">Pending Review</option>
                     <option value="Prio 1">Priority 1</option>
@@ -242,9 +267,9 @@
                 </select>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 13px; color: #6b7280; font-weight: 500;">Category:</span>
-                <select id="filter-category-md" style="margin: 0; padding: 0 12px; font-size: 13px; border-radius: 8px; border: 1px solid #d1d5db; width: auto; height: 38px; box-sizing: border-box; cursor: pointer; color: #4b5563; outline: none; background-color: #fff;" onchange="applyFilterMD()">
+            <div class="filt-grup">
+                <span class="filt-label">Category:</span>
+                <select id="filter-category-md" class="filt-select" onchange="applyFilterMD()">
                     <option value="All">All Categories</option>
                     <option value="Daily">Daily</option>
                     <option value="Weekly">Weekly BOD</option>
@@ -254,7 +279,7 @@
             </div>
         </div>
 
-        <div class="table-container">
+        <div class="table-container table-container-fill">
             <table style="min-width: 1120px;">
                 <thead>
                     <tr>
@@ -284,7 +309,7 @@
                         <option value="25">25</option>
                         <option value="50">50</option>
                         <option value="100">100</option>
-                        <option value="All">All</option>
+                        <option value="200">200</option>
                     </select>
                 </div>
             </div>
@@ -301,7 +326,7 @@
     <div class="card card-admin">
         <div style="flex: 1; padding-right: 32px; border-right: 1px solid #e5e7eb;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h2 style="margin: 0;">Add User</h2>
+                <h2 class="u-m0">Add User</h2>
                 <button class="btn-secondary btn-sm" onclick="backToMenu()">Back</button>
             </div>
             
@@ -346,7 +371,7 @@
     <div class="card card-admin">
         <div style="flex: 1; padding-right: 32px; border-right: 1px solid #e5e7eb;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <h2 style="margin: 0;">Add Dept.</h2>
+                <h2 class="u-m0">Add Dept.</h2>
                 <button class="btn-secondary btn-sm" onclick="backToMenu()">Back</button>
             </div>
             
@@ -375,22 +400,22 @@
 </div>
 
 <div id="view-login-logs" class="screen">
-    <div class="card card-wide" style="max-width: 1000px;">
+    <div class="card card-wide u-mw-1000">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px;">
             <h2 style="margin: 0; font-size: 22px;">User Login Activity</h2>
-            <div class="action-group" style="display: flex; gap: 10px;">
+            <div class="action-group u-baris">
                 <button class="btn-sm" onclick="refreshLoginLogs()">Refresh Data</button>
                 <button class="btn-secondary btn-sm" onclick="backToMenu()">Back to Menu</button>
             </div>
         </div>
 
-        <div id="login-logs-dept-alert" style="margin-bottom: 16px;"></div>
+        <div class="u-mb-4" id="login-logs-dept-alert"></div>
 
         <div style="background-color: #f8fafc; padding: 16px 20px; border-radius: 12px; border: 1px solid #e5e7eb; display: flex; gap: 16px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
-            <input type="text" id="search-login-logs" class="search-input" placeholder="🔍 Search username..." oninput="filterLoginLogs()" style="flex-grow: 1; min-width: 200px; margin: 0; height: 38px;">
+            <input type="text" id="search-login-logs" class="search-input" placeholder="🔍 Search username..." oninput="filterLoginLogsDebounced()" style="flex-grow: 1; min-width: 200px; margin: 0; height: 38px;">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <span style="font-size: 13px; color: #6b7280; font-weight: 500;">Date:</span>
-                <input type="date" id="filter-date-login-logs" style="margin: 0; padding: 0 12px; font-size: 13px; border-radius: 8px; border: 1px solid #d1d5db; height: 38px; box-sizing: border-box;" onchange="filterLoginLogs()">
+                <input type="date" id="filter-date-login-logs" style="margin: 0; padding: 0 12px; font-size: 13px; border-radius: 8px; border: 1px solid #d1d5db; height: 38px; box-sizing: border-box;" onchange="changeLoginLogsDate()">
             </div>
         </div>
 
@@ -409,15 +434,33 @@
                 <tbody></tbody>
             </table>
         </div>
-        <div class="table-footer">Showing <strong id="login-logs-total-count">0</strong> login event(s)</div>
+        <div class="table-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <span>Showing <strong id="login-logs-total-count">0</strong> login event(s)<span id="login-logs-range-hint" style="color:#6b7280; font-weight:400;"></span></span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 12px; color: #6b7280; font-weight: 500;">Show:</span>
+                    <select id="login-logs-page-size" style="margin: 0; padding: 0 10px; font-size: 12px; border-radius: 6px; border: 1px solid #d1d5db; width: auto; height: 30px; box-sizing: border-box; cursor: pointer; color: #4b5563; outline: none; background-color: #fff;" onchange="changeLoginLogsPageSize()">
+                        <option value="25">25</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                        <option value="250">250</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button id="login-logs-btn-prev" class="btn-secondary btn-sm" onclick="changeLoginLogsPage(-1)" style="margin: 0; padding: 4px 12px;">&lt; Prev</button>
+                <span id="login-logs-page-info" style="font-size: 12px; color: #4b5563; font-weight: 600; min-width: 90px; text-align: center;">Page 1 of 1</span>
+                <button id="login-logs-btn-next" class="btn-secondary btn-sm" onclick="changeLoginLogsPage(1)" style="margin: 0; padding: 4px 12px;">Next &gt;</button>
+            </div>
+        </div>
     </div>
 </div>
 
 <div id="view-mom-archive" class="screen">
-    <div class="card card-wide" style="max-width: 1000px;">
+    <div class="card card-wide u-mw-1000">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px;">
             <h2 style="margin: 0; font-size: 22px;">Minutes of Meeting (MOM) Archives</h2>
-            <div class="action-group" style="display: flex; gap: 10px;">
+            <div class="action-group u-baris">
                 <button class="btn-sm" onclick="refreshMOMArchives()">Refresh Data</button>
                 <button class="btn-secondary btn-sm" onclick="backToMenu()">Back to Menu</button>
             </div>
@@ -454,11 +497,11 @@
         <div style="padding: 24px; overflow-y: auto; background-color: #f9fafb;">
             
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; background: #ffffff; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 24px; font-size: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-                <div><span style="color: #6b7280; font-weight: 500; display: inline-block; width: 90px;">Note Taker</span> <span style="color: #d1d5db;">|</span> <span id="det-mom-notulen" style="font-weight: 600; color: #111827; margin-left: 8px;"></span></div>
-                <div><span style="color: #6b7280; font-weight: 500; display: inline-block; width: 90px;">Chairman</span> <span style="color: #d1d5db;">|</span> <span id="det-mom-chairman" style="font-weight: 600; color: #111827; margin-left: 8px;"></span></div>
-                <div><span style="color: #6b7280; font-weight: 500; display: inline-block; width: 90px;">Date</span> <span style="color: #d1d5db;">|</span> <span id="det-mom-date" style="font-weight: 600; color: #111827; margin-left: 8px;"></span></div>
-                <div><span style="color: #6b7280; font-weight: 500; display: inline-block; width: 90px;">Time</span> <span style="color: #d1d5db;">|</span> <span id="det-mom-time" style="font-weight: 600; color: #111827; margin-left: 8px;"></span></div>
-                <div style="grid-column: span 2;"><span style="color: #6b7280; font-weight: 500; display: inline-block; width: 90px;">Location</span> <span style="color: #d1d5db;">|</span> <span id="det-mom-location" style="font-weight: 600; color: #111827; margin-left: 8px;"></span></div>
+                <div><span class="u-label-info">Note Taker</span> <span style="color: #d1d5db;">|</span> <span class="u-nilai" id="det-mom-notulen"></span></div>
+                <div><span class="u-label-info">Chairman</span> <span style="color: #d1d5db;">|</span> <span class="u-nilai" id="det-mom-chairman"></span></div>
+                <div><span class="u-label-info">Date</span> <span style="color: #d1d5db;">|</span> <span class="u-nilai" id="det-mom-date"></span></div>
+                <div><span class="u-label-info">Time</span> <span style="color: #d1d5db;">|</span> <span class="u-nilai" id="det-mom-time"></span></div>
+                <div style="grid-column: span 2;"><span class="u-label-info">Location</span> <span style="color: #d1d5db;">|</span> <span class="u-nilai" id="det-mom-location"></span></div>
                 <div style="grid-column: span 2; border-top: 1px dashed #e5e7eb; padding-top: 16px; margin-top: 4px;">
                     <span style="color: #6b7280; font-weight: 500; display: block; margin-bottom: 8px;">Participants:</span> 
                     <div id="det-mom-participants" style="line-height: 1.6; color: #374151; background: #f3f4f6; padding: 12px 16px; border-radius: 6px; border: 1px solid #e5e7eb;"></div>

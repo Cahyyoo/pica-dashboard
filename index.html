@@ -50,7 +50,7 @@
         </div>
 
     <footer style="display: flex; justify-content: center;">
-        <div style="text-align: center;">PICA System v2.2.1</div>
+        <div style="text-align: center;">PICA System v2.3.0</div>
     </footer>
 
     <div id="modals-container"></div>
@@ -77,26 +77,26 @@
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; margin-bottom: 24px;">
                     <div style="display: flex; flex-direction: column; gap: 12px;">
                         <div>
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Note Taker <span style="color:#ef4444;">*</span></label>
-                            <input type="text" id="mom-notulen" placeholder="Example: P. Ikhsan" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; outline: none;">
+                            <label class="u-label-blok">Note Taker <span class="u-bahaya">*</span></label>
+                            <input class="u-isian" type="text" id="mom-notulen" placeholder="Example: P. Ikhsan">
                         </div>
                         <div>
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Chairman <span style="color:#ef4444;">*</span></label>
-                            <input type="text" id="mom-chairman" placeholder="Example: P. Putu" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; outline: none;">
+                            <label class="u-label-blok">Chairman <span class="u-bahaya">*</span></label>
+                            <input class="u-isian" type="text" id="mom-chairman" placeholder="Example: P. Putu">
                         </div>
                         <div>
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Date <span style="color:#ef4444;">*</span></label>
-                            <input type="date" id="mom-date" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; outline: none;">
+                            <label class="u-label-blok">Date <span class="u-bahaya">*</span></label>
+                            <input class="u-isian" type="date" id="mom-date">
                         </div>
                     </div>
                     <div style="display: flex; flex-direction: column; gap: 12px;">
                         <div>
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Time <span style="color:#ef4444;">*</span></label>
-                            <input type="text" id="mom-time" placeholder="Example: 13:30 - 15:30" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; outline: none;">
+                            <label class="u-label-blok">Time <span class="u-bahaya">*</span></label>
+                            <input class="u-isian" type="text" id="mom-time" placeholder="Example: 13:30 - 15:30">
                         </div>
                         <div>
-                            <label style="display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 6px;">Location <span style="color:#ef4444;">*</span></label>
-                            <input type="text" id="mom-location" placeholder="Example: Site office Molore" style="width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; outline: none;">
+                            <label class="u-label-blok">Location <span class="u-bahaya">*</span></label>
+                            <input class="u-isian" type="text" id="mom-location" placeholder="Example: Site office Molore">
                         </div>
                     </div>
                 </div>
@@ -117,8 +117,8 @@
     </div>
 
     <div id="update-overlay">
-        <h2 id="update-title" style="color: #ffffff !important;">Sistem PICA Sedang Diperbarui...</h2>
-        <p>Mohon jangan matikan perangkat. Mengunduh data di latar belakang.</p>
+        <h2 id="update-title" style="color: #ffffff !important;">PICA System Update in Progress...</h2>
+        <p>Please do not turn off this device. Downloading in the background.</p>
         
         <div class="progress-container">
             <div id="progress-bar"></div>
@@ -126,24 +126,13 @@
         
         <h3 id="progress-text">0%</h3>
         
-        <button id="btn-restart-update">Instal & Muat Ulang Sekarang</button>
+        <button id="btn-restart-update">Install & Restart Now</button>
     </div>
 
-    <script src="./node_modules/jspdf/dist/jspdf.umd.min.js"></script>
-    <script>
-        window.jsPDF = window.jspdf.jsPDF;
-    </script>
-    <script src="./node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.min.js"></script>
-
+    <!-- jsPDF (410 KB) + jspdf-autotable (32 KB) SENGAJA tidak dimuat di sini. Dulu keduanya
+         skrip blocking yang ikut di-parse setiap boot -- termasuk saat user cuma mau login --
+         padahal hanya dipakai ketika tombol Export PDF ditekan. Sekarang disuntik saat benar-benar
+         dibutuhkan oleh pastikanJsPDF() di js/issue-pdf.js. -->
     <script type="module" src="./js/app.js"></script>
-    <script>
-        // Memastikan tombol back browser desktop berjalan dengan Role Navigation
-        const originalNavigate = window.navigateToRole;
-        window.navigateToRole = function(role) {
-            if(originalNavigate) originalNavigate(role);
-            document.getElementById('global-nav').style.display = 'flex';
-            document.getElementById('user-badge').innerText = role;
-        };
-    </script>
 </body>
 </html>

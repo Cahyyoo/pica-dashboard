@@ -1,5 +1,6 @@
 // js/issues.js
 import { API_URL } from './config.js';
+import { escapeHtml } from './utils.js';
 
 // --- EKSPOR SELURUH FILE MODULAR AGAR SISTEM (app.js) TETAP BISA MEMBACANYA ---
 export * from './issue-guard.js';
@@ -19,7 +20,7 @@ export async function loadDepartments() {
         const depts = await response.json();
         let optionsHtml = '<option value="">-- Select Department --</option>';
         depts.forEach(d => {
-            optionsHtml += `<option value="${d.name}">${d.name}</option>`;
+            optionsHtml += `<option value="${escapeHtml(d.name)}">${escapeHtml(d.name)}</option>`;
         });
 
         const deptIssue = document.getElementById('issue-dept');

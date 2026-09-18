@@ -7,11 +7,11 @@
 //   Kolom "Issued" dan "PIC" pada file Excel hanya disimpan sebagai catatan referensi di Remark,
 //   tidak dipakai untuk menentukan siapa Issued By / PIC / Department-nya.
 import { API_URL, getAuthHeaders } from './config.js';
-import { showCustomAlert } from './utils.js';
+import { showCustomAlert, reportActivity, escapeHtml, lupakanCacheIssue } from './utils.js';
 import { state } from './issue-state.js';
 import { loadDashboardMD, fetchUsersForMapping } from './issue-dashboard.js';
 
-const EXPECTED_HEADERS = ['Case/Notification', 'Date Issue', 'Issued', 'Corrective Action', 'PIC', 'Due Date', 'Stat', 'Remark', 'SKALA', 'Category'];
+const EXPECTED_HEADERS = ['Case/Notification', 'Date Issue', 'Issued', 'Corrective Action', 'PIC', 'Due Date', 'Stat', 'Remark', 'SCALE', 'Category'];
 const DEFAULT_DEPARTMENT = 'MD';
 
 // PENTING: TIDAK mengandalkan window.XLSX (global dari <script> tag). Karena window ini
@@ -31,6 +31,10 @@ function getXlsx() {
 
 function normalizeStatus(text) {
     const t = String(text || '').toLowerCase();
+    // Dicek paling awal supaya sel seperti "Continue - progress" tidak keburu tertangkap
+    // cabang 'progr' di bawah. "Continue" tidak mengandung clos/progr/open, jadi tanpa
+    // cabang ini nilainya akan diam-diam jatuh ke fallback 'Open' di akhir fungsi.
+    if (t.includes('contin') || t.includes('lanjut')) return 'Continue';
     if (t.includes('clos')) return 'Closed';
     if (t.includes('progr')) return 'Progress';
     if (t.includes('open')) return 'Open';
@@ -101,7 +105,7 @@ function updateImportInfoBanner() {
     if (!infoEl) return;
 
     const currentUsername = localStorage.getItem('username') || 'MD';
-    infoEl.innerHTML = `<span style="color:#059669;">✓ Issued By and PIC will both be set to: <strong>${currentUsername}</strong> &nbsp;|&nbsp; Department will be set to: <strong>${DEFAULT_DEPARTMENT}</strong></span>`;
+    infoEl.innerHTML = `<span style="color:#059669;">✓ Issued By and PIC will both be set to: <strong>${escapeHtml(currentUsername)}</strong> &nbsp;|&nbsp; Department will be set to: <strong>${DEFAULT_DEPARTMENT}</strong></span>`;
 }
 
 // ==========================================
@@ -122,7 +126,7 @@ export async function downloadImportTemplate() {
             'Due Date': '2026-05-31',
             'Stat': 'Progress',
             'Remark': 'Additional notes...',
-            'SKALA': 'Prio 2',
+            'SCALE': 'Prio 2',
             'Category': 'Daily'
         };
         const ws = XLSX.utils.json_to_sheet([sampleRow], { header: EXPECTED_HEADERS });
@@ -286,11 +290,11 @@ function renderImportPreview() {
     rows.forEach((row, index) => {
         rowsHTML += `<tr>
             <td style="text-align:center;">${index + 1}</td>
-            <td style="max-width:260px; white-space:normal;">${row.title}</td>
-            <td style="white-space:nowrap;">${row.dueDate || '-'}</td>
-            <td style="text-align:center;">${row.status}</td>
-            <td style="text-align:center;">${row.priority}</td>
-            <td style="text-align:center;">${row.category}</td>
+            <td style="max-width:260px; white-space:normal;">${escapeHtml(row.title)}</td>
+            <td style="white-space:nowrap;">${escapeHtml(row.dueDate || '-')}</td>
+            <td style="text-align:center;">${escapeHtml(row.status)}</td>
+            <td style="text-align:center;">${escapeHtml(row.priority)}</td>
+            <td style="text-align:center;">${escapeHtml(row.category)}</td>
         </tr>`;
     });
 
@@ -318,60 +322,100 @@ export async function submitImportRows() {
     const currentUsername = localStorage.getItem('username') || '';
     let created = 0, failed = 0;
 
-    for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        if (progressEl) progressEl.innerText = `Importing... ${i + 1}/${rows.length}`;
+    // SATU permintaan untuk seluruh berkas, lewat POST /issue/import-bulk.
+    //
+    // Sebelumnya di sini ada loop yang melakukan POST /issue/create lalu PATCH
+    // /issue/update/:id untuk SETIAP baris, berurutan: 200 baris = 400 perjalanan jaringan
+    // beruntun dengan modal membeku di "Importing... n/200". Endpoint bulk-nya sudah ada
+    // sejak lama di backend, dibungkus satu $transaction, tapi tidak pernah dipanggil
+    // siapa pun -- grep seluruh frontend untuk "import-bulk" memberi nol hasil.
+    //
+    // Konsekuensi yang perlu diketahui: sekarang ATOMIK. Dulu kalau baris ke-150 gagal,
+    // 149 baris sebelumnya sudah terlanjur tersimpan dan harus dibereskan manual. Sekarang
+    // satu baris bermasalah berarti TIDAK ADA yang tersimpan, dan berkasnya bisa diperbaiki
+    // lalu diimpor ulang tanpa khawatir ada duplikat separuh jalan.
+    if (progressEl) progressEl.innerText = `Importing ${rows.length} row(s)...`;
 
-        try {
-            const createRes = await fetch(`${API_URL}/issue/create`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify({
-                    title: row.title,
-                    department,
-                    description: row.correctiveAction || row.title,
-                    correctiveAction: row.correctiveAction || row.title,
-                    category: row.category,
-                    issuedBy: String(currentUserId),
-                    dueDate: row.dueDate || new Date().toISOString().split('T')[0],
-                    priority: row.priority
-                })
-            });
+    const hariIni = new Date().toISOString().split('T')[0];
+    const payloadRows = rows.map(row => {
+        // Remark disusun persis seperti jalur lama, termasuk penanda import di akhir --
+        // penanda itu yang membuat entri hasil import tidak bisa diedit dan menahan
+        // aktivitas per-baris agar tidak membanjiri log.
+        const remarkParts = [];
+        if (row.dateIssueRaw) remarkParts.push(`Original Date Issue: ${row.dateIssueRaw}`);
+        if (row.remark) remarkParts.push(row.remark);
+        if (row.issuerRaw) remarkParts.push(`Original Issued (Excel): ${row.issuerRaw}`);
+        if (row.picRaw) remarkParts.push(`Original PIC (Excel): ${row.picRaw}`);
+        remarkParts.push(`[Imported via Excel by ${currentUsername}]`);
 
-            if (!createRes.ok) { failed++; continue; }
-            created++;
+        return {
+            title: row.title,
+            correctiveAction: row.correctiveAction || row.title,
+            category: row.category,
+            // Fallback yang sama dengan jalur lama. Tanpa ini, satu sel tanggal kosong
+            // akan ditolak validator DTO dan menggagalkan SELURUH batch.
+            dueDate: row.dueDate || hariIni,
+            status: row.status,
+            priority: row.priority,
+            remark: remarkParts.join(' | '),
+        };
+    });
 
-            let createdIssue = null;
-            try { createdIssue = await createRes.json(); } catch (e) { /* respons bukan JSON */ }
-            const newId = createdIssue ? (createdIssue.id || (createdIssue.data && createdIssue.data.id)) : null;
+    let pesanGagal = '';
+    // Import massal TIDAK lewat kirimSekali(), jadi cache dihanguskan di sini. Dilakukan SEBELUM
+    // permintaan berangkat supaya pembacaan apa pun setelah ini pasti mengambil data baru.
+    lupakanCacheIssue();
+    try {
+        const res = await fetch(`${API_URL}/issue/import-bulk`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                department,
+                issuedBy: Number(currentUserId),
+                // PIC diset ke MD yang mengimpor, sama seperti jalur lama: create menebak
+                // Dept Head dari department, lalu PATCH menimpanya dengan user ini.
+                picId: Number(currentUserId),
+                rows: payloadRows,
+            }),
+        });
 
-            if (newId) {
-                const remarkParts = [];
-                if (row.dateIssueRaw) remarkParts.push(`Original Date Issue: ${row.dateIssueRaw}`);
-                if (row.remark) remarkParts.push(row.remark);
-                if (row.issuerRaw) remarkParts.push(`Original Issued (Excel): ${row.issuerRaw}`);
-                if (row.picRaw) remarkParts.push(`Original PIC (Excel): ${row.picRaw}`);
-                remarkParts.push(`[Imported via Excel by ${currentUsername}]`);
-
-                const formData = new FormData();
-                formData.append('status', row.status);
-                formData.append('remark', remarkParts.join(' | '));
-                formData.append('picId', String(currentUserId));
-
-                const headers = getAuthHeaders();
-                delete headers['Content-Type'];
-
-                try {
-                    await fetch(`${API_URL}/issue/update/${newId}`, { method: 'PATCH', headers, body: formData });
-                } catch (e) { /* baris tetap dianggap terbuat walau update lanjutan gagal */ }
-            }
-        } catch (error) {
-            failed++;
+        if (res.ok) {
+            const hasil = await res.json().catch(() => null);
+            created = hasil && typeof hasil.created === 'number' ? hasil.created : rows.length;
+            failed = rows.length - created;
+        } else {
+            failed = rows.length;
+            const galat = await res.json().catch(() => null);
+            const pesan = galat && galat.message;
+            pesanGagal = Array.isArray(pesan) ? pesan.join('; ') : (pesan || `Server responded ${res.status}.`);
         }
+    } catch (error) {
+        failed = rows.length;
+        pesanGagal = 'Failed to reach the server.';
     }
 
     if (btnSubmit) btnSubmit.disabled = false;
     if (progressEl) progressEl.innerText = '';
+
+    // Satu baris ringkasan untuk seluruh batch. Jalur bulk tidak melewati updateIssue,
+    // jadi tidak ada aktivitas per-baris yang perlu ditahan -- ini satu-satunya catatan
+    // yang ditulis untuk sebuah import.
+    reportActivity('IMPORT_EXCEL', {
+        targetType: 'issue',
+        changes: { attempted: rows.length, created, failed, department },
+        summary: created + ' of ' + rows.length + ' issue(s) imported to ' + department,
+    });
+
+    // Gagal total: modalnya DIBIARKAN TERBUKA. Karena import sekarang atomik, tidak ada
+    // satu pun baris yang tersimpan -- pengguna bisa membetulkan berkasnya lalu menekan
+    // Import lagi tanpa risiko duplikat. Menutup modal di sini berarti memaksa mereka
+    // memilih ulang berkasnya hanya untuk mencoba lagi.
+    if (created === 0) {
+        return showCustomAlert(
+            "Import Failed",
+            `Nothing was imported, so no partial data was left behind. ${pesanGagal} Fix the file and try again.`
+        );
+    }
 
     closeImportModal();
     await loadDashboardMD();

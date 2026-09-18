@@ -9,7 +9,7 @@
 // `.s` selalu diam-diam dibuang saat file disimpan. `exceljs` open-source/MIT dan mendukung
 // penuh fill color, border, font, dan embed gambar, sehingga hasil Excel-nya bisa benar-benar
 // mirip export PDF.
-import { showCustomAlert, formatWitaDate, stripAutoForwardNotes, archiveMOMRecord, getBase64Image } from './utils.js';
+import { showCustomAlert, formatWitaDate, stripAutoForwardNotes, archiveMOMRecord, buildArchiveIssues, getBase64Image, reportActivity, saringIssueUntukEkspor, riwayatTerbaru, beriNapasUI } from './utils.js';
 import { state } from './issue-state.js';
 
 function getExcelJS() {
@@ -24,7 +24,7 @@ const THIN_BORDER = { style: 'thin', color: { argb: 'FF000000' } };
 const ALL_BORDERS = { top: THIN_BORDER, left: THIN_BORDER, bottom: THIN_BORDER, right: THIN_BORDER };
 
 // Kolom tabel issue: 11 kolom (No..SKALA), sama persis urutannya dengan export PDF.
-const TABLE_COLS = ['No', 'Case/Notification', 'Date Issue', 'Issued', 'Corrective Action', 'PIC', 'Due Date', 'Stat', 'Remark', 'Category', 'SKALA'];
+const TABLE_COLS = ['No', 'Case/Notification', 'Date Issue', 'Issued', 'Corrective Action', 'PIC', 'Due Date', 'Stat', 'Remark', 'Category', 'SCALE'];
 const COL_WIDTHS = [5, 32, 12, 13, 36, 14, 12, 12, 36, 12, 10];
 
 function colorForCategory() {
@@ -56,6 +56,11 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
     const ExcelJS = getExcelJS();
     if (!ExcelJS) return showCustomAlert("Error", "Excel library failed to load.");
 
+    // Sama seperti jalur PDF: beri tahu user lebih dulu, lalu beri satu frame untuk melukisnya
+    // sebelum exceljs mulai bekerja sinkron dan memblokir UI.
+    showCustomAlert("Please Wait", "Preparing the report...");
+    await beriNapasUI();
+
     // ==========================================
     // DATA DEFAULT (JIKA momData KOSONG / BYPASS) — sama seperti exportFilteredIssuesToPDF
     // ==========================================
@@ -68,7 +73,13 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
     if (momData && momData.date) dDate = formatWitaDate(momData.date);
 
     const defaultParticipants = ["", "", ""];
-    const pNames = momData ? momData.participants : defaultParticipants;
+    // `participants` di database bertipe `Json?` (nullable, schema.prisma) dan arsip lama
+    // bisa menyimpannya sebagai null. Dinormalkan SEKALI di sini supaya setiap pemakaian
+    // di bawah aman. Dulu null lolos sampai ke dereferensi: jalur PDF melempar di dua
+    // tempat dan jalur Excel di satu tempat lain -- untuk masukan yang sama persis.
+    const pNames = momData
+        ? (Array.isArray(momData.participants) ? momData.participants : [])
+        : defaultParticipants;
 
     // ==========================================
     // LOGIKA FILTERING DATA TABEL — SAMA PERSIS SEPERTI exportFilteredIssuesToPDF
@@ -78,36 +89,17 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
     if (momData && momData.dataIssues) {
         filteredData = momData.dataIssues;
     } else if (role === 'MD') {
-        const statusFilter = document.getElementById('filter-status-md').value;
-        const scaleFilter = document.getElementById('filter-scale-md').value;
-        const categoryFilter = document.getElementById('filter-category-md').value;
-        const startDateFilter = document.getElementById('filter-date-start-md').value;
-        const endDateFilter = document.getElementById('filter-date-end-md').value;
-
-        filteredData = state.globalIssues.filter(item => {
-            const matchStatus = (statusFilter === 'All') ? (item.status !== 'Closed') : (item.status === statusFilter);
-            const matchScale = (scaleFilter === 'All') || (item.priority === scaleFilter);
-            const matchCategory = (categoryFilter === 'All') || (item.category === categoryFilter);
-            let matchDate = true;
-            if (startDateFilter || endDateFilter) {
-                const issueDate = new Date(item.createdAt);
-                const start = startDateFilter ? new Date(startDateFilter) : null;
-                if (start) start.setHours(0, 0, 0, 0);
-                const end = endDateFilter ? new Date(endDateFilter) : null;
-                if (end) end.setHours(23, 59, 59, 999);
-                if (start && end) matchDate = issueDate >= start && issueDate <= end;
-                else if (start) matchDate = issueDate >= start;
-                else if (end) matchDate = issueDate <= end;
-            }
-            return matchStatus && matchScale && matchCategory && matchDate;
-        });
+        // Semua filter -- TERMASUK kotak pencarian 'search-md' -- dibaca lewat satu
+        // penyaring bersama di utils.js. Blok ini dulu disalin utuh di sini dan di
+        // jalur satunya, dan keduanya sama-sama melewatkan kotak pencarian itu.
+        filteredData = saringIssueUntukEkspor(state.globalIssues, state.globalUsers);
     }
 
     if (filteredData.length === 0) {
         return showCustomAlert("Warning", "No issues match the current filters. Adjust the filters before exporting.");
     }
 
-    const cleanParticipants = (pNames || []).filter(name => name && name.trim() !== '');
+    const cleanParticipants = pNames.filter(name => name && name.trim() !== '');
 
     // ==========================================
     // BANGUN WORKBOOK
@@ -159,7 +151,7 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
 
     // Kotak info meeting (Notulen/Chairman/Date/Time/Location) — kolom J:K, baris 1-5
     const infoRows = [
-        ['Notulen', dNotulen],
+        ['Note Taker', dNotulen],
         ['Chairman', dChairman],
         ['Date', dDate],
         ['Time', dTime],
@@ -197,19 +189,33 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
     headerRow.height = 22;
     ws.autoFilter = { from: { row: headerRowNum, column: 1 }, to: { row: headerRowNum, column: TABLE_COLS.length } };
 
+    // Index user sekali (O(m)). Hanya untuk data live & arsip bentuk LAMA -- arsip bentuk
+    // baru sudah membawa nama hasil resolusi.
+    const userById = state.userById;
+
     filteredData.forEach((item, index) => {
-        const issuerUser = state.globalUsers.find(u => String(u.id) === String(item.issuedBy));
-        const issuerName = issuerUser ? issuerUser.username : `ID: ${item.issuedBy}`;
-        const picUser = state.globalUsers.find(u => String(u.id) === String(item.picId));
-        const picName = picUser ? picUser.username : '-';
+        // Arsip bentuk BARU menyimpan nama (snapshot); data live & arsip LAMA menyimpan id.
+        let issuerName = item.issuerName;
+        if (!issuerName) {
+            const issuerUser = userById.get(String(item.issuedBy));
+            issuerName = issuerUser ? issuerUser.username : `ID: ${item.issuedBy}`;
+        }
+        let picName = item.picName;
+        if (!picName) {
+            const picUser = userById.get(String(item.picId));
+            picName = picUser ? picUser.username : '-';
+        }
 
         const correctiveActions = item.correctiveAction || item.description || '-';
 
         // Remark cuma menampilkan update PALING AKHIR (bukan gabungan seluruh riwayat) — riwayat
         // lengkapnya tetap bisa dilihat di timeline "Progress & Status History" halaman detail issue.
+        // Arsip bentuk BARU sudah menyimpan hasil akhirnya di latestRemark.
         let remarks = '-';
-        if (item.histories && item.histories.length > 0) {
-            const latestHistory = [...item.histories].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+        if (typeof item.latestRemark === 'string') {
+            if (item.latestRemark) remarks = item.latestRemark;
+        } else if (item.histories && item.histories.length > 0) {
+            const latestHistory = riwayatTerbaru(item.histories);
             const cleanedRemark = stripAutoForwardNotes(latestHistory.remark);
             if (cleanedRemark) remarks = cleanedRemark;
         }
@@ -273,7 +279,8 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
         time: dTime,
         location: dLocation,
         participants: cleanParticipants,
-        dataIssues: filteredData
+        // Dirampingkan dulu: buang histories, simpan remark terakhir yang sudah dihitung.
+        dataIssues: buildArchiveIssues(filteredData, userById)
     };
 
     try {
@@ -290,6 +297,11 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
             // Jika ini proses download ulang dari Arsip MOM, jangan simpan ke DB lagi!
             if (momData && momData.isArchive) {
                 showCustomAlert("Success", "Archived Excel file has been successfully downloaded!");
+                reportActivity('EXPORT_MOM_REDOWNLOAD', {
+                    targetType: 'mom',
+                    changes: { format: 'excel', issueCount: filteredData.length },
+                    summary: 'Archived MOM re-downloaded as Excel',
+                });
                 return;
             }
 

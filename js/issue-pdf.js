@@ -1,7 +1,42 @@
 // js/issue-pdf.js
-import { showCustomAlert, formatWitaDate, formatWitaDateTime, stripAutoForwardNotes, archiveMOMRecord, getBase64Image } from './utils.js';
+import { showCustomAlert, formatWitaDate, formatWitaDateTime, stripAutoForwardNotes, archiveMOMRecord, buildArchiveIssues, getBase64Image, reportActivity, saringIssueUntukEkspor, riwayatTerbaru, beriNapasUI } from './utils.js';
 import { state } from './issue-state.js';
 import { exportFilteredIssuesToExcel } from './issue-excel-export.js';
+
+// =========================================================================
+// PEMUAT jsPDF YANG MALAS (LAZY)
+// =========================================================================
+// jsPDF 410 KB + autotable 32 KB dulu dimuat lewat <script> di index.html, jadi ikut di-parse
+// dan dieksekusi SETIAP boot -- termasuk di layar login -- padahal hanya dipakai saat menekan
+// Export PDF. Sekarang disuntik saat pertama kali dibutuhkan.
+// Janjinya disimpan supaya dua klik export beruntun tidak memuat dua kali, dan direset saat
+// gagal supaya percobaan berikutnya boleh mencoba lagi.
+let pemuatJsPDF = null;
+
+function suntikScript(src) {
+    return new Promise((resolve, reject) => {
+        const el = document.createElement('script');
+        el.src = src;
+        el.onload = () => resolve();
+        el.onerror = () => reject(new Error('Gagal memuat ' + src));
+        document.head.appendChild(el);
+    });
+}
+
+function pastikanJsPDF() {
+    if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
+    if (!pemuatJsPDF) {
+        // autotable WAJIB menyusul jsPDF, bukan paralel: plugin itu menempel ke prototype
+        // jsPDF saat dieksekusi, jadi jsPDF harus sudah ada lebih dulu.
+        pemuatJsPDF = suntikScript('./node_modules/jspdf/dist/jspdf.umd.min.js')
+            .then(() => {
+                window.jsPDF = window.jspdf.jsPDF; // nama lama, dipertahankan untuk jaga-jaga
+                return suntikScript('./node_modules/jspdf-autotable/dist/jspdf.plugin.autotable.min.js');
+            })
+            .catch((err) => { pemuatJsPDF = null; throw err; });
+    }
+    return pemuatJsPDF;
+}
 
 export async function exportSingleIssueToPDF() {
     const userRole = localStorage.getItem('user_role');
@@ -9,8 +44,20 @@ export async function exportSingleIssueToPDF() {
         return showCustomAlert("Access Denied", "Only Management (MD) is allowed to export PDF reports.");
     }
 
-    const issue = state.globalIssues.find(i => i.id === state.currentDetailId);
+    const issue = state.detailIssue;
     if (!issue) return showCustomAlert("Error", "No report data found.");
+
+    try {
+        await pastikanJsPDF();
+    } catch (e) {
+        console.error(e);
+        return showCustomAlert("Error", "Failed to load the PDF engine. Please restart the app.");
+    }
+
+    // Tampilkan dulu bahwa app sedang bekerja, lalu beri satu frame untuk melukisnya. Pembuatan
+    // PDF di bawah sepenuhnya sinkron dan memblokir UI sampai selesai.
+    showCustomAlert("Please Wait", "Preparing the report...");
+    await beriNapasUI();
 
     const { jsPDF } = window.jspdf; 
     const doc = new jsPDF();
@@ -28,9 +75,9 @@ export async function exportSingleIssueToPDF() {
     doc.setDrawColor(229, 231, 235);
     doc.line(14, 30, 196, 30);
 
-    const issuerUser = state.globalUsers.find(u => String(u.id) === String(issue.issuedBy));
+    const issuerUser = state.userById.get(String(issue.issuedBy));
     const issuerName = issuerUser ? issuerUser.username : `ID: ${issue.issuedBy}`;
-    const picUser = state.globalUsers.find(u => String(u.id) === String(issue.picId));
+    const picUser = state.userById.get(String(issue.picId));
     const picName = picUser ? picUser.username : 'Unassigned';
 
     const safeTitle = (issue.caseNotification || '').replace(/[^\x20-\x7E\n]/g, '');
@@ -123,7 +170,15 @@ export async function exportSingleIssueToPDF() {
         const pdfBase64 = doc.output('datauristring');
         const result = await ipcRenderer.invoke('simpan-pdf', pdfBase64, `PICA-Report-Detail-${issue.id}.pdf`);
         
-        if (result.success) showCustomAlert("Success", "PDF file has been successfully saved!");
+        if (result.success) {
+            showCustomAlert("Success", "PDF file has been successfully saved!");
+            reportActivity('EXPORT_PDF_SINGLE', {
+                targetType: 'issue',
+                targetId: issue.id,
+                targetLabel: issue.caseNotification,
+                summary: 'Single-issue PDF exported',
+            });
+        }
         else if (!result.canceled) showCustomAlert("Error", "Failed to save the PDF file.");
     } catch (err) {
         console.error(err);
@@ -140,7 +195,7 @@ export async function exportSingleIssueToPDF() {
 // LOGIKA MODAL MANUAL INPUT MOM (FORM ABSENSI DINAMIS)
 // =========================================================================
 
-export function preloadMOMInputs() {
+function preloadMOMInputs() {
     const container = document.getElementById('mom-participants-container');
     if (container && !document.getElementById('btn-add-participant')) {
         container.innerHTML = ''; // Bersihkan kontainer bawaan HTML
@@ -219,11 +274,16 @@ window.updateParticipantNumbers = function() {
     });
 };
 
-setTimeout(preloadMOMInputs, 2000);
+// CATATAN: dulu di sini ada `setTimeout(preloadMOMInputs, 2000)` di level modul, sehingga 2 detik
+// setelah app dibuka form absensi MOM dirakit sendiri walau user tidak pernah menyentuh fitur
+// export. Sekarang dipanggil dari openMOMModal() saja -- fungsinya memang idempoten (dijaga
+// pemeriksaan #btn-add-participant), jadi aman dipanggil tiap kali modal dibuka.
 
 // format: 'pdf' (default) atau 'excel' — menentukan tombol "Export PDF"/"Export Excel" mana
 // di dashboard MD yang membuka modal ini, supaya submitMOMExport() tahu harus generate yang mana.
 export function openMOMModal(format = 'pdf') {
+    preloadMOMInputs();
+
     const dateInput = document.getElementById('mom-date');
     if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
 
@@ -271,7 +331,7 @@ export function submitMOMExport() {
 
     } catch (error) {
         console.error("Failed while generating export: ", error);
-        alert("System error while retrieving form data: " + error.message);
+        showCustomAlert("Export Failed", "System error while retrieving form data: " + error.message);
     }
 }
 
@@ -283,6 +343,18 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
     if (userRole !== 'MD' && userRole !== 'KTT') {
         return showCustomAlert("Access Denied", "Only Management (MD) is allowed to export PDF reports.");
     }
+
+    try {
+        await pastikanJsPDF();
+    } catch (e) {
+        console.error(e);
+        return showCustomAlert("Error", "Failed to load the PDF engine. Please restart the app.");
+    }
+
+    // Tampilkan dulu bahwa app sedang bekerja, lalu beri satu frame untuk melukisnya. Pembuatan
+    // PDF di bawah sepenuhnya sinkron dan memblokir UI sampai selesai.
+    showCustomAlert("Please Wait", "Preparing the report...");
+    await beriNapasUI();
 
     const { jsPDF } = window.jspdf; 
     const doc = new jsPDF('l', 'mm', 'a4'); // Kertas A4 Landscape
@@ -303,44 +375,35 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
 
     // Peserta Default (Jika kosong)
     const defaultParticipants = ["", "", ""];
-    const pNames = momData ? momData.participants : defaultParticipants;
+    // `participants` di database bertipe `Json?` (nullable, schema.prisma) dan arsip lama
+    // bisa menyimpannya sebagai null. Dinormalkan SEKALI di sini supaya setiap pemakaian
+    // di bawah aman. Dulu null lolos sampai ke dereferensi: jalur PDF melempar di dua
+    // tempat dan jalur Excel di satu tempat lain -- untuk masukan yang sama persis.
+    const pNames = momData
+        ? (Array.isArray(momData.participants) ? momData.participants : [])
+        : defaultParticipants;
 
 
     // ... (LOGIKA FILTERING DATA TABEL TETAP SAMA SEPERTI SEBELUMNYA) ...
     let filteredData = [];
-    const currentUserId = String(localStorage.getItem('user_id'));
 
     if (momData && momData.dataIssues) {
         filteredData = momData.dataIssues;
     }
 
     else if (role === 'MD') {
-        const statusFilter = document.getElementById('filter-status-md').value;
-        const scaleFilter = document.getElementById('filter-scale-md').value;
-        const categoryFilter = document.getElementById('filter-category-md').value;
-        const startDateFilter = document.getElementById('filter-date-start-md').value;
-        const endDateFilter = document.getElementById('filter-date-end-md').value;
-
-        filteredData = state.globalIssues.filter(item => {
-            // Default "All Status" export excludes already-Closed issues; picking "Closed" explicitly still shows them.
-            const matchStatus = (statusFilter === 'All') ? (item.status !== 'Closed') : (item.status === statusFilter);
-            const matchScale = (scaleFilter === 'All') || (item.priority === scaleFilter);
-            const matchCategory = (categoryFilter === 'All') || (item.category === categoryFilter);
-            let matchDate = true;
-            if (startDateFilter || endDateFilter) {
-                const issueDate = new Date(item.createdAt);
-                const start = startDateFilter ? new Date(startDateFilter) : null;
-                if (start) start.setHours(0, 0, 0, 0);
-                const end = endDateFilter ? new Date(endDateFilter) : null;
-                if (end) end.setHours(23, 59, 59, 999);
-                if (start && end) matchDate = issueDate >= start && issueDate <= end;
-                else if (start) matchDate = issueDate >= start;
-                else if (end) matchDate = issueDate <= end;
-            }
-            return matchStatus && matchScale && matchCategory && matchDate;
-        });
+        // Semua filter -- TERMASUK kotak pencarian 'search-md' -- dibaca lewat satu
+        // penyaring bersama di utils.js. Blok ini dulu disalin utuh di sini dan di
+        // jalur satunya, dan keduanya sama-sama melewatkan kotak pencarian itu.
+        filteredData = saringIssueUntukEkspor(state.globalIssues, state.globalUsers);
     }
 
+    // Jalur Excel sudah punya penjaga ini; jalur PDF belum -- akibatnya MD yang
+    // filternya tidak mencocokkan apa pun tetap mendapat PDF berisi tabel kosong,
+    // dan (kalau ini ekspor MOM) tabel kosong itu ikut terarsip permanen.
+    if (!filteredData || filteredData.length === 0) {
+        return showCustomAlert("Warning", "No issues match the current filters. Adjust the filters before exporting.");
+    }
 
     // ==========================================
     // MENGGAMBAR KOP "MINUTES OF MEETING" 
@@ -404,7 +467,7 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
     // Info Meeting dari Inputan
     doc.setFontSize(8);
     const infoX = 229;
-    doc.text(`Notulen   : ${dNotulen}`, infoX, 14);
+    doc.text(`Note Taker: ${dNotulen}`, infoX, 14);
     doc.line(227, 15, 287, 15);
     doc.text(`Chairman  : ${dChairman}`, infoX, 19);
     doc.line(227, 20, 287, 20);
@@ -417,11 +480,23 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
     // ==========================================
     // 3. MENYUSUN DATA TABEL (MEMBUAT LIST BERNOMOR)
     // ==========================================
+    // Index user sekali (O(m)). Hanya dipakai untuk data live & arsip bentuk LAMA -- arsip
+    // bentuk baru sudah membawa nama hasil resolusi, jadi tidak bergantung globalUsers.
+    const userById = state.userById;
+
     const tableBody = filteredData.map((item, index) => {
-        const issuerUser = state.globalUsers.find(u => String(u.id) === String(item.issuedBy));
-        const issuerName = issuerUser ? issuerUser.username : `ID: ${item.issuedBy}`;
-        const picUser = state.globalUsers.find(u => String(u.id) === String(item.picId));
-        const picName = picUser ? picUser.username : '-';
+        // Arsip bentuk BARU menyimpan nama (snapshot permanen); data live & arsip bentuk
+        // LAMA menyimpan id yang perlu di-resolve saat render.
+        let issuerName = item.issuerName;
+        if (!issuerName) {
+            const issuerUser = userById.get(String(item.issuedBy));
+            issuerName = issuerUser ? issuerUser.username : `ID: ${item.issuedBy}`;
+        }
+        let picName = item.picName;
+        if (!picName) {
+            const picUser = userById.get(String(item.picId));
+            picName = picUser ? picUser.username : '-';
+        }
         const safeTitle = (item.caseNotification || '-').replace(/[^\x20-\x7E\n]/g, '');
 
         // Corrective Action sekarang diisi sekali di awal (saat issue dibuat), bukan per-history lagi.
@@ -429,9 +504,13 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
 
         // Remark cuma menampilkan update PALING AKHIR (bukan gabungan seluruh riwayat) — riwayat
         // lengkapnya tetap bisa dilihat di timeline "Progress & Status History" halaman detail issue.
+        // Arsip bentuk BARU sudah menyimpan hasil akhirnya di latestRemark, jadi seluruh
+        // array histories tidak perlu ikut disimpan. Bentuk LAMA dihitung seperti semula.
         let remarks = "-";
-        if (item.histories && item.histories.length > 0) {
-            const latestHistory = [...item.histories].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+        if (typeof item.latestRemark === 'string') {
+            if (item.latestRemark) remarks = item.latestRemark.replace(/[^\x20-\x7E\n]/g, '');
+        } else if (item.histories && item.histories.length > 0) {
+            const latestHistory = riwayatTerbaru(item.histories);
             const cleanedRemark = stripAutoForwardNotes(latestHistory.remark);
             if (cleanedRemark) remarks = cleanedRemark.replace(/[^\x20-\x7E\n]/g, '');
         }
@@ -457,7 +536,7 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
     doc.autoTable({
         startY: 38, // Mulai tepat di bawah kop tabel
         margin: { left: 10, right: 10 },
-        head: [["No", "Case/Notification", "Date Issued", "Issued", "Corrective Action", "PIC", "Due Date", "Status", "Remark", "Category", "SKALA"]],
+        head: [["No", "Case/Notification", "Date Issued", "Issued", "Corrective Action", "PIC", "Due Date", "Status", "Remark", "Category", "SCALE"]],
         body: tableBody,
         theme: 'grid',
         headStyles: {
@@ -534,7 +613,8 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
         time: dTime,
         location: dLocation,
         participants: pNames.filter(name => name && name.trim() !== ''), // Hapus peserta kosong
-        dataIssues: filteredData 
+        // Dirampingkan dulu: buang histories, simpan remark terakhir yang sudah dihitung.
+        dataIssues: buildArchiveIssues(filteredData, userById)
     };
 
     try {
@@ -548,6 +628,11 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
             // Jika ini proses download ulang, jangan simpan ke DB lagi!
             if (momData && momData.isArchive) {
                 showCustomAlert("Success", "Archived PDF file has been successfully downloaded!");
+                reportActivity('EXPORT_MOM_REDOWNLOAD', {
+                    targetType: 'mom',
+                    changes: { format: 'pdf', issueCount: filteredData.length },
+                    summary: 'Archived MOM re-downloaded as PDF',
+                });
                 return; 
             }
 

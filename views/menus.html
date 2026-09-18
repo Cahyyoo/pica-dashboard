@@ -1,40 +1,177 @@
-<div id="view-user-menu" class="screen screen-center">
-    <div class="card">
-        <h2>User Menu</h2>
-        <p class="subtitle">Select an operational action</p>
-        <button onclick="showView('view-user')">Create New Report</button>
-        <button class="btn-secondary" onclick="openUserHistory()">View My Reports</button>
+<div id="view-user-menu" class="screen">
+    <div class="menu-page">
+        <div class="menu-eyebrow">User Menu</div>
+        <h2 class="menu-title">Welcome back!</h2>
+        <p class="menu-sub">Choose the action you want to perform.</p>
+
+        <div class="menu-grid">
+            <button class="menu-card" onclick="showView('view-user')">
+                <span class="menu-card-ikon ikon-indigo">&#128221;</span>
+                <span class="menu-card-judul">Create New Report</span>
+                <p class="menu-card-desc">Submit a new PICA report for a finding on site.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
+            <button class="menu-card" onclick="openUserHistory()">
+                <span class="menu-card-ikon ikon-teal">&#128203;</span>
+                <span class="menu-card-judul">My Reports</span>
+                <p class="menu-card-desc">Review the reports you have submitted and their progress.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+        </div>
     </div>
 </div>
 
-<div id="view-dept-head" class="screen screen-center">
-    <div class="card">
-        <h2>PIC Menu</h2>
-        <p class="subtitle">Select an operational action</p>
-        <button onclick="showView('view-user')">Create New Report</button>
-        <button class="btn-secondary" onclick="showView('view-pic-update')">Update Task List</button>
-        <button onclick="openUserHistory()" style="margin-top: 10px;">My Input History</button>
+<div id="view-dept-head" class="screen">
+    <div class="menu-page">
+        <div class="menu-eyebrow">PIC Menu</div>
+        <h2 class="menu-title">Welcome back!</h2>
+        <p class="menu-sub">Choose the action you want to perform.</p>
+
+        <div class="menu-grid">
+            <button class="menu-card" onclick="showView('view-user')">
+                <span class="menu-card-ikon ikon-indigo">&#128221;</span>
+                <span class="menu-card-judul">Create New Report</span>
+                <p class="menu-card-desc">Submit a new PICA report for a finding on site.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
+            <!-- id="pic-menu-badge" WAJIB dipertahankan: perbaruiBadgeMenuPic() terikat pada
+                 id ini dan gagal DIAM-DIAM (return tanpa galat) kalau id-nya hilang. -->
+            <button class="menu-card" onclick="showView('view-pic-category')">
+                <span class="menu-card-ikon ikon-teal">&#9989;</span>
+                <span class="menu-card-judul">Update Task List<span id="pic-menu-badge" class="menu-card-badge" hidden></span></span>
+                <p class="menu-card-desc">Fill in today's progress for the issues assigned to you.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
+            <button class="menu-card" onclick="openUserHistory()">
+                <span class="menu-card-ikon ikon-langit">&#128203;</span>
+                <span class="menu-card-judul">My Input History</span>
+                <p class="menu-card-desc">Review the reports you have submitted and their progress.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+        </div>
     </div>
 </div>
 
-<div id="view-md-menu" class="screen screen-center">
-    <div class="card">
-        <h2>Management Menu</h2>
-        <p class="subtitle">Select an operational action</p>
-        <button onclick="showView('view-md')">View Monitoring Dashboard</button>
-        <button class="menu-btn btn-secondary" onclick="showView('view-mom-archive')" style="margin-bottom: 10px;">MOM Archives</button>
-        <button onclick="showView('view-admin')">Manage Users</button>
-        <button class="btn-secondary" onclick="showView('view-manage-dept')"" style="margin-bottom: 10px;">Manage Departments</button>
-        <button onclick="showView('view-login-logs')">Login Activity</button>
+<div id="view-md-menu" class="screen">
+    <div class="menu-page">
+        <div class="menu-eyebrow">Management Menu</div>
+        <h2 class="menu-title">Welcome back!</h2>
+        <p class="menu-sub">Choose the action you want to perform.</p>
+
+        <div class="menu-grid">
+            <button class="menu-card" onclick="showView('view-md')">
+                <span class="menu-card-ikon ikon-indigo">&#128200;</span>
+                <span class="menu-card-judul">Monitoring Dashboard</span>
+                <p class="menu-card-desc">Track every PICA report with its status and priority.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
+            <button class="menu-card" onclick="showView('view-mom-archive')">
+                <span class="menu-card-ikon ikon-ungu">&#128193;</span>
+                <span class="menu-card-judul">MOM Archives</span>
+                <p class="menu-card-desc">Open Minutes of Meeting that were exported earlier.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
+            <button class="menu-card" onclick="showView('view-admin')">
+                <span class="menu-card-ikon ikon-teal">&#128101;</span>
+                <span class="menu-card-judul">Manage Users</span>
+                <p class="menu-card-desc">Manage user accounts, access rights, and departments.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
+            <button class="menu-card" onclick="showView('view-manage-dept')">
+                <span class="menu-card-ikon ikon-amber">&#127970;</span>
+                <span class="menu-card-judul">Manage Departments</span>
+                <p class="menu-card-desc">Set up the list of departments available in the system.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
+            <button class="menu-card" onclick="showView('view-login-logs')">
+                <span class="menu-card-ikon ikon-langit">&#128337;</span>
+                <span class="menu-card-judul">Login Activity</span>
+                <p class="menu-card-desc">See who signed in, when, and from which department.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+        </div>
     </div>
 </div>
 
 <div id="view-ktt-menu" class="screen">
-    <div class="card" style="text-align: center; width: 400px; margin: 0 auto; margin-top: 50px;">
-        <h2>KTT Dashboard</h2>
-        <p class="subtitle" style="margin-bottom: 24px;">Monitor and review all PICA reports.</p>
-        
-        <button onclick="showView('view-md'); loadDashboardMD();" style="width: 100%; margin-bottom: 12px; padding: 14px;">Review All Issues</button>
-        <button class="menu-btn btn-secondary" onclick="showView('view-mom-archive')">MOM Archives</button>
+    <div class="menu-page">
+        <div class="menu-eyebrow">KTT Menu</div>
+        <h2 class="menu-title">Welcome back!</h2>
+        <p class="menu-sub">Monitor and review all PICA reports.</p>
+
+        <div class="menu-grid">
+            <button class="menu-card" onclick="showView('view-md')">
+                <span class="menu-card-ikon ikon-indigo">&#128200;</span>
+                <span class="menu-card-judul">Review All Issues</span>
+                <p class="menu-card-desc">Track every PICA report with its status and priority.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
+            <button class="menu-card" onclick="showView('view-mom-archive')">
+                <span class="menu-card-ikon ikon-ungu">&#128193;</span>
+                <span class="menu-card-judul">MOM Archives</span>
+                <p class="menu-card-desc">Open Minutes of Meeting that were exported earlier.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Langkah baru di alur PIC: menu -> KATEGORI -> tabel per kategori.
+     Markupnya STATIS. JS hanya mengisi angka pada elemen yang sudah ada di sini; tidak
+     ada innerHTML yang membangun ulang grid, jadi biayanya mendekati nol.
+     Keempat kategori selalu tampil di posisi yang sama, termasuk yang kosong -- posisi
+     tetap itu yang bisa dihafal; kartu yang muncul-hilang memaksa orang mencari tiap kali. -->
+<div id="view-pic-category" class="screen">
+    <div class="menu-page">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
+            <div>
+                <div class="menu-eyebrow">Task Categories</div>
+                <h2 class="menu-title">Choose a category</h2>
+                <p class="menu-sub">Categories with tasks that still need today's update are marked in red.</p>
+            </div>
+            <button class="btn-secondary btn-sm" onclick="backToMenu()">Back to Menu</button>
+        </div>
+
+        <!-- Strip total: satu-satunya tempat jumlah tunggakan SELURUH kategori terbaca
+             sekilas, tanpa perlu membuka satu kartu pun. -->
+        <div id="pic-cat-alert" class="pic-alert pic-alert-aman" style="margin-top: 0; margin-bottom: 18px;"></div>
+
+        <div class="menu-grid">
+            <button class="menu-card" id="pic-cat-Daily" onclick="bukaKategoriPic('Daily')">
+                <span class="menu-card-ikon ikon-indigo menu-card-mono">D</span>
+                <span class="menu-card-judul">Daily<span class="menu-card-badge" id="pic-cat-badge-Daily" hidden></span></span>
+                <p class="menu-card-desc" id="pic-cat-desc-Daily">&mdash;</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
+            <button class="menu-card" id="pic-cat-Weekly" onclick="bukaKategoriPic('Weekly')">
+                <span class="menu-card-ikon ikon-ungu menu-card-mono">W</span>
+                <span class="menu-card-judul">Weekly BOD<span class="menu-card-badge" id="pic-cat-badge-Weekly" hidden></span></span>
+                <p class="menu-card-desc" id="pic-cat-desc-Weekly">&mdash;</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
+            <button class="menu-card" id="pic-cat-Midyear" onclick="bukaKategoriPic('Midyear')">
+                <span class="menu-card-ikon ikon-teal menu-card-mono">M</span>
+                <span class="menu-card-judul">Midyear<span class="menu-card-badge" id="pic-cat-badge-Midyear" hidden></span></span>
+                <p class="menu-card-desc" id="pic-cat-desc-Midyear">&mdash;</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
+            <button class="menu-card" id="pic-cat-Annual" onclick="bukaKategoriPic('Annual')">
+                <span class="menu-card-ikon ikon-amber menu-card-mono">A</span>
+                <span class="menu-card-judul">Annual<span class="menu-card-badge" id="pic-cat-badge-Annual" hidden></span></span>
+                <p class="menu-card-desc" id="pic-cat-desc-Annual">&mdash;</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+        </div>
     </div>
 </div>

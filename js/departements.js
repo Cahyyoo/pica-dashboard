@@ -1,5 +1,5 @@
 import { API_URL, getAuthHeaders } from './config.js';
-import { showCustomAlert, showCustomConfirm } from './utils.js'; 
+import { showCustomAlert, showCustomConfirm, escapeHtml } from './utils.js'; 
 import { loadDepartments } from './issues.js'; 
 
 // ==========================================
@@ -12,22 +12,26 @@ export async function loadAdminDepartments() {
         
         const tbody = document.getElementById('tbody-manage-dept');
         if (!tbody) return;
-        tbody.innerHTML = '';
 
+        // Kumpulkan ke satu string lalu assign SEKALI (pola sama dengan renderMDTable()).
+        let html = '';
         depts.forEach((d, index) => {
-            tbody.innerHTML += `
+            html += `
                 <tr>
                     <td style="text-align: center;">${index + 1}</td>
-                    <td>${d.name}</td>
+                    <td>${escapeHtml(d.name)}</td>
                     <td>
                         <div style="display: flex; gap: 8px; justify-content: center;">
-                            <button class="btn-sm btn-secondary" onclick="openEditDeptModal(${d.id}, '${d.name}')">Edit</button>
-                            <button class="btn-sm btn-danger" onclick="deleteDepartment(${d.id}, '${d.name}')">Delete</button>
+                            <button class="btn-sm btn-secondary" data-id="${d.id}" data-name="${escapeHtml(d.name)}"
+                                    onclick="openEditDeptModal(this.dataset.id, this.dataset.name)">Edit</button>
+                            <button class="btn-sm btn-danger" data-id="${d.id}" data-name="${escapeHtml(d.name)}"
+                                    onclick="deleteDepartment(this.dataset.id, this.dataset.name)">Delete</button>
                         </div>
                     </td>
                 </tr>
             `;
         });
+        tbody.innerHTML = html;
     } catch (error) {
         console.error("Failed to fetch department data:", error);
     }

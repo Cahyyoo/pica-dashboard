@@ -1,6 +1,8 @@
 const { app, BrowserWindow, ipcMain, dialog, powerMonitor } = require('electron'); // 'globalShortcut' dihapus
 const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
+const { installKeyGuards } = require('./keyguard');
+const { installContextMenu } = require('./contextmenu');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -20,9 +22,13 @@ let mainWindow;
 // true kalau app sedang dalam mode "Guest terkunci" (SSID SPRM-GUEST, backend tak terjangkau
 // dari jaringan itu) -- selama true, Exit App & Logout dinonaktifkan. TIDAK lagi butuh restart
 // untuk lepas -- lihat startRuntimeNetworkMonitor() di bawah, otomatis lepas begitu backend
-// terjangkau lagi.
+// terjangkau lagi. Hanya bisa menyala DI TENGAH SESI (app sudah terbuka lalu jaringan memburuk):
+// saat boot app tidak pernah dibuka sebelum backend benar-benar terjangkau.
 let isGuestLocked = false;
 let runtimeNetworkMonitor = null;
+// Timer patroli saat app BELUM terbuka (backend tak terjangkau). setTimeout berantai,
+// bukan setInterval -- lihat startBackgroundPatrol().
+let patrolTimer = null;
 
 // --- CEK APAKAH APLIKASI DIJALANKAN DARI AUTO-START (SILUMAN) ---
 const isHiddenStart = process.argv.includes('--hidden');
@@ -45,7 +51,7 @@ function createWindow () {
       splash = new BrowserWindow({
         width: 450, height: 300,
         transparent: true, frame: false, alwaysOnTop: true, center: true,
-        icon: path.join(__dirname, 'img/logo.png'), 
+        icon: path.join(__dirname, 'public/img/logo_pica.png'), 
         show: true // Splash Screen langsung tampil
       });
       splash.loadFile('splash.html');
@@ -59,7 +65,7 @@ function createWindow () {
     alwaysOnTop: true, // Memaksa PICA selalu berada di depan aplikasi apa pun
     autoHideMenuBar: true, 
     type: 'screen-saver', // Tingkat prioritas layar tertinggi di OS
-    icon: path.join(__dirname, 'img/logo.png'), 
+    icon: path.join(__dirname, 'public/img/logo_pica.png'), 
     show: false, 
     webPreferences: {
       nodeIntegration: true, contextIsolation: false
@@ -67,6 +73,13 @@ function createWindow () {
   });
 
   mainWindow.loadFile('index.html');
+
+  // Blocks Alt / Ctrl+R / F5 / F12 / Ctrl+W and friends, and swaps the default menu
+  // for one without Reload. The menu bar opens by holding Shift+P+I+C+A+S.
+  installKeyGuards(mainWindow);
+
+  // Electron ships no default context menu, so right-click does nothing until this exists.
+  installContextMenu(mainWindow);
 
   function bringWindowToFront(reason) {
         console.log(`${reason} Mengirim sinyal ke Frontend...`);
@@ -185,27 +198,36 @@ function createWindow () {
 function startRuntimeNetworkMonitor() {
   if (runtimeNetworkMonitor) return; // sudah jalan, jangan didobelkan
   runtimeNetworkMonitor = setInterval(async () => {
-    const [reachable, ssid, officeWifiNearby] = await Promise.all([
-      checkServerConnection(), getCurrentSSID(), isOfficeWifiNearby(),
-    ]);
+    // Cek backend dulu, SENDIRIAN. Saat backend terjangkau, satu-satunya cabang yang bisa jalan
+    // di bawah adalah `reachable && isGuestLocked`, yang tidak memakai ssid maupun scan WiFi --
+    // jadi memanggil keduanya di kondisi normal murni pemborosan: dua proses `netsh` tiap 10
+    // detik seumur hidup app, salah satunya memicu scan radio WiFi. Keduanya sekarang hanya
+    // dijalankan kalau memang ada masalah koneksi.
+    const reachable = await checkServerConnection();
     let changed = false;
 
-    if (reachable && isGuestLocked) {
-      // Backend terjangkau lagi -- lepas kunci otomatis, tidak perlu restart app.
-      isGuestLocked = false;
-      changed = true;
-      log.info('Backend terjangkau lagi -- mode Guest terkunci otomatis dilepas.');
-    } else if (!reachable && (ssid === 'SPRM-GUEST' || officeWifiNearby) && !isGuestLocked) {
-      // WiFi berpindah ke SPRM-GUEST, ATAU device tetap di sekitar kantor tapi tersambung
-      // ke jaringan lain (mis. hotspot HP) -- kunci Exit App & Logout.
-      isGuestLocked = true;
-      changed = true;
-      log.info(ssid === 'SPRM-GUEST'
-        ? 'WiFi berpindah ke SPRM-GUEST saat app berjalan -- Exit App/Logout dikunci.'
-        : 'WiFi kantor terdeteksi di sekitar tapi tidak tersambung -- Exit App/Logout dikunci.');
+    if (reachable) {
+      if (isGuestLocked) {
+        // Backend terjangkau lagi -- lepas kunci otomatis, tidak perlu restart app.
+        isGuestLocked = false;
+        changed = true;
+        log.info('Backend terjangkau lagi -- mode Guest terkunci otomatis dilepas.');
+      }
+    } else if (!isGuestLocked) {
+      const [ssid, officeWifiNearby] = await Promise.all([getCurrentSSID(), isOfficeWifiNearby()]);
+
+      if (ssid === 'SPRM-GUEST' || officeWifiNearby) {
+        // WiFi berpindah ke SPRM-GUEST, ATAU device tetap di sekitar kantor tapi tersambung
+        // ke jaringan lain (mis. hotspot HP) -- kunci Exit App & Logout.
+        isGuestLocked = true;
+        changed = true;
+        log.info(ssid === 'SPRM-GUEST'
+          ? 'WiFi berpindah ke SPRM-GUEST saat app berjalan -- Exit App/Logout dikunci.'
+          : 'WiFi kantor terdeteksi di sekitar tapi tidak tersambung -- Exit App/Logout dikunci.');
+      }
+      // Kondisi lain (unreachable, SSID lain, DAN tidak ada WiFi kantor yang terlihat) sengaja
+      // TIDAK mengubah status lock -- di luar cakupan fitur ini.
     }
-    // Kondisi lain (unreachable, SSID lain, DAN tidak ada WiFi kantor yang terlihat) sengaja
-    // TIDAK mengubah status lock -- di luar cakupan fitur ini.
 
     if (changed && mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('guest-lock-status-changed', isGuestLocked);
@@ -297,7 +319,7 @@ function ensureScheduledTask() {
     execFile(
       'schtasks',
       ['/create', '/tn', 'PICA Scheduler', '/xml', tempXmlPath, '/f'],
-      { timeout: 15000 },
+      { timeout: 15000, windowsHide: true },
       (error, stdout, stderr) => {
         if (error) {
           log.error('[ScheduledTask] Gagal mendaftarkan PICA Scheduler:', error.message, stderr);
@@ -399,24 +421,70 @@ function checkServerConnection() {
 
         // Set Timeout maksimal 3 detik agar proses booting tidak terhambat jika RTO
         req.setTimeout(3000, () => {
-            req.abort(); 
+            req.destroy(); 
             resolve(false); 
         });
     });
 }
-
 const OFFICE_SSIDS = ['SPRM-MGT', 'SPRM-GUEST', 'SPRM-CCTV', 'SPRM-CORP'];
 
+// SSID kantor yang BENAR-BENAR menjangkau backend. Kalau backend tak terjangkau tapi SSID ini
+// terlihat di sekitar, app mencoba PINDAH ke sini dulu sebelum menyerah dan menunggu di background.
+const TARGET_SSID = 'SPRM-CORP';
+
+// Probe internet publik. Memakai endpoint NCSI milik Windows sendiri -- inilah yang dipakai
+// Windows untuk memutuskan ikon "No internet", jadi kalau jaringan kantor mengizinkan sesuatu
+// keluar, endpoint ini yang paling mungkin diizinkan. Isi bodinya ikut diperiksa (bukan cuma
+// status 200) supaya captive portal, yang selalu membalas 200 dengan halaman login, tidak
+// salah dibaca sebagai "ada internet".
+const INTERNET_PROBE_URL = 'http://www.msftconnecttest.com/connecttest.txt';
+const INTERNET_PROBE_BODY = 'Microsoft Connect Test';
+const INTERNET_PROBE_TIMEOUT_MS = 2500;
+
+// SPRM-CORP yang tidak memberi internet langsung dianggap gagal, tanpa repot mengecek backend.
+// Aman dipakai karena SUDAH DIKONFIRMASI: VLAN SPRM-CORP mengizinkan akses keluar, jadi gerbang
+// ini tidak akan membuang jaringan yang sebenarnya sehat.
+// Balik ke false HANYA kalau suatu saat VLAN kantor memblokir internet keluar tapi tetap
+// melayani backend internal -- cek internet lalu turun peran jadi sekadar "tunggu DHCP selesai".
+const REQUIRE_INTERNET_ON_TARGET = true;
+
+// Jeda antar percobaan probe. Sengaja pendek: asosiasi WiFi + DHCP di jaringan sehat selesai
+// dalam 1-2 detik, jadi jeda panjang cuma menahan jendela app muncul tanpa alasan.
+const PROBE_GAP_MS = 1500;
+
+// Apakah jaringan yang sedang dipakai punya akses INTERNET? Beda dari checkServerConnection()
+// yang menguji backend LOKAL. Dua pertanyaan berbeda: sebuah SSID bisa punya salah satunya,
+// keduanya, atau tidak sama sekali.
+// Tidak pernah throw -- kegagalan apapun aman jatuh ke false.
+function hasInternetConnection() {
+    return new Promise((resolve) => {
+        const req = http.get(INTERNET_PROBE_URL, (res) => {
+            if (res.statusCode !== 200) { res.resume(); return resolve(false); }
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', (c) => { if (body.length < 256) body += c; });
+            res.on('end', () => resolve(body.includes(INTERNET_PROBE_BODY)));
+        }).on('error', () => resolve(false));
+
+        req.setTimeout(INTERNET_PROBE_TIMEOUT_MS, () => { req.destroy(); resolve(false); });
+    });
+}
+
+// Opsi standar semua pemanggilan `netsh` di bawah. execFile (BUKAN exec/shell) + timeout supaya
+// perintah yang menggantung tidak menahan app. `windowsHide` WAJIB: netsh adalah aplikasi console,
+// tanpa opsi ini Windows memunculkan jendela hitam sekilas di atas app kiosk tiap kali dipanggil.
+const NETSH_OPTS = { timeout: 5000, windowsHide: true };
+
 // Baca SSID WiFi yang sedang aktif (Windows) lewat `netsh wlan show interfaces`.
-// Dipakai khusus untuk mendeteksi SSID "SPRM-GUEST" (jaringan tamu yang memang tidak
-// pernah bisa menjangkau backend internal) supaya app tetap dibuka dalam mode terkunci,
-// bukan menghilang selamanya seperti perilaku default saat backend tak terjangkau.
+// Dipakai untuk mendeteksi SSID "SPRM-GUEST" (jaringan tamu yang memang tidak pernah bisa
+// menjangkau backend internal) dan untuk memastikan kita tidak menyambung ulang ke SSID yang
+// memang sudah aktif.
 // Tidak pernah throw/reject -- kegagalan apapun (perintah gagal, format tak dikenali, dsb.)
-// aman jatuh ke `null`, yang berarti perilaku LAMA (polling tanpa henti) tetap berlaku.
+// aman jatuh ke `null`, yang berarti perilaku paling konservatif tetap berlaku.
 function getCurrentSSID() {
     return new Promise((resolve) => {
         try {
-            execFile('netsh', ['wlan', 'show', 'interfaces'], { timeout: 5000 }, (err, stdout) => {
+            execFile('netsh', ['wlan', 'show', 'interfaces'], NETSH_OPTS, (err, stdout) => {
                 if (err || !stdout) return resolve(null);
                 const lines = stdout.split(/\r?\n/);
                 for (const line of lines) {
@@ -433,23 +501,314 @@ function getCurrentSSID() {
     });
 }
 
-// Cek apakah salah satu SSID kantor TERLIHAT di sekitar (hasil scan `netsh wlan show
-// networks`), TERLEPAS dari SSID mana yang sedang tersambung. Beda dengan getCurrentSSID()
-// yang cuma lihat koneksi aktif -- ini menjawab "apakah device secara fisik ada di kantor",
-// walau lagi connect ke jaringan lain (mis. hotspot HP). Dipakai supaya app tetap dibuka
-// (mode Guest terkunci) dalam skenario itu, bukan menghilang selamanya seperti sebelumnya.
-// Tidak pernah throw -- kegagalan apapun aman jatuh ke false.
+// `netsh wlan show networks` memicu SCAN RADIO WiFi -- operasi paling mahal di seluruh app ini:
+// boros baterai dan bisa membuat koneksi tersendat sesaat. Karena itu hasilnya di-cache sebentar
+// (di bawah interval polling) supaya satu siklus polling cukup SATU scan, berapapun banyaknya
+// pembaca. `scanInFlight` menyatukan pemanggil yang datang bersamaan ke satu scan yang sama.
+// Tidak pernah throw -- kegagalan apapun aman jatuh ke string kosong (= tidak ada WiFi terlihat).
+const SCAN_CACHE_MS = 8000;
+let scanCache = { at: 0, out: '' };
+let scanInFlight = null;
+
+function scanVisibleNetworks() {
+    if (Date.now() - scanCache.at < SCAN_CACHE_MS) return Promise.resolve(scanCache.out);
+    if (scanInFlight) return scanInFlight;
+
+    scanInFlight = new Promise((resolve) => {
+        const done = (out) => {
+            scanCache = { at: Date.now(), out };
+            scanInFlight = null;
+            resolve(out);
+        };
+        try {
+            execFile('netsh', ['wlan', 'show', 'networks'], NETSH_OPTS, (err, stdout) => {
+                done((err || !stdout) ? '' : stdout);
+            });
+        } catch (e) {
+            done('');
+        }
+    });
+    return scanInFlight;
+}
+
+// Apakah salah satu SSID kantor TERLIHAT di sekitar, TERLEPAS dari SSID mana yang sedang
+// tersambung? Beda dengan getCurrentSSID() yang cuma lihat koneksi aktif -- ini menjawab
+// "apakah device secara fisik ada di kantor", walau sedang connect ke jaringan lain
+// (mis. hotspot HP). Dipakai runtime monitor untuk memasang mode Guest terkunci.
 function isOfficeWifiNearby() {
+    return scanVisibleNetworks().then(out => OFFICE_SSIDS.some(name => out.includes(name)));
+}
+
+// SSID yang sedang dipakai ini layak DITINGGALKAN? Persis dua hal: SPRM-GUEST (jaringan tamu,
+// memang tidak pernah menjangkau backend internal) dan SSID asing apa pun -- yang di kantor
+// praktis berarti hotspot HP. SSID kantor lain (SPRM-MGT, SPRM-CCTV, dan SPRM-CORP sendiri)
+// sengaja TIDAK disentuh: itu jaringan sah, dan backend mati dari sana berarti masalahnya di
+// SERVER, bukan di pilihan WiFi -- memindahkan koneksi tidak menolong, hanya memutus yang jalan.
+// `ssid` null (WiFi mati / kabel LAN) dihitung layak: tidak ada koneksi WiFi yang dirusak.
+function isSwitchableSsid(ssid) {
+    return ssid === 'SPRM-GUEST' || !OFFICE_SSIDS.includes(ssid);
+}
+
+// Apakah profil WiFi `ssid` sudah tersimpan di laptop ini? Inilah alasan app TIDAK perlu menyimpan
+// password WiFi kantor di dalam kodenya: kita hanya menyambung ulang ke profil yang memang sudah
+// pernah dibuat user/IT di device ini. Perintah ini murah -- cuma baca konfigurasi tersimpan,
+// tidak memicu scan radio seperti `show networks`.
+function hasSavedProfile(ssid) {
     return new Promise((resolve) => {
         try {
-            execFile('netsh', ['wlan', 'show', 'networks'], { timeout: 5000 }, (err, stdout) => {
-                if (err || !stdout) return resolve(false);
-                resolve(OFFICE_SSIDS.some(name => stdout.includes(name)));
+            execFile('netsh', ['wlan', 'show', 'profiles'], NETSH_OPTS, (err, stdout) => {
+                resolve(!err && !!stdout && stdout.includes(ssid));
             });
         } catch (e) {
             resolve(false);
         }
     });
+}
+
+// Perintahkan Windows menyambung ke profil WiFi yang sudah tersimpan. Tidak butuh hak admin.
+// Timeout lebih panjang dari NETSH_OPTS karena proses asosiasi bisa memakan beberapa detik.
+function connectToSsid(ssid) {
+    return new Promise((resolve) => {
+        try {
+            execFile('netsh', ['wlan', 'connect', 'name=' + ssid, 'ssid=' + ssid],
+                { timeout: 10000, windowsHide: true }, (err) => resolve(!err));
+        } catch (e) {
+            resolve(false);
+        }
+    });
+}
+
+// Lepaskan diri dari SSID yang terbukti buntu, supaya Windows bebas menyambung sendiri ke profil
+// tersimpan lainnya. Tersambung ke jaringan mati terlihat seperti "connected" padahal tidak bisa
+// dipakai; terputus setidaknya jujur dan memunculkan pemilih jaringan Windows untuk user.
+function disconnectWifi() {
+    return new Promise((resolve) => {
+        try {
+            execFile('netsh', ['wlan', 'disconnect'], NETSH_OPTS, (err) => resolve(!err));
+        } catch (e) {
+            resolve(false);
+        }
+    });
+}
+
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Cegah percobaan pindah WiFi menumpuk: satu siklus bisa memakan ~65 detik, sementara
+// pemanggilnya (patroli background) berjalan berkala.
+let wifiJoinInProgress = false;
+
+// Setelah satu percobaan pemindahan gagal, jangan menyentuh WiFi user lagi untuk sementara.
+// Tanpa ini pengembalian SSID di bawah justru merusak koneksi user berulang-ulang: dulu
+// percobaan yang gagal meninggalkan laptop di SPRM-CORP dan siklus berikutnya berhenti sendiri
+// karena SSID aktif sudah = target -- itu rem alaminya. Begitu SSID asal dikembalikan, rem itu
+// hilang. Selama masa tenang patroli tetap jalan, tapi hanya mengecek backend (murah).
+const JOIN_COOLDOWN_MS = 10 * 60 * 1000; // 10 menit
+let joinCooldownUntil = 0;
+
+// Batas menyerah. Tiga percobaan penuh yang gagal (@ ~65 dtk + tenang 10 menit) berarti app sudah
+// menghabiskan ~23 menit tanpa hasil: jaringan di tempat ini memang tidak bisa dipakai hari ini.
+// Terus mengintai hanya membuang baterai dan tiap 10 menit berisiko menyentuh WiFi user lagi,
+// jadi app BERHENTI SENDIRI (lihat patrolTick). Hitungan ini sengaja hidup di dalam proses:
+// begitu app mati angkanya ikut hilang, sehingga laptop yang dinyalakan ulang -- atau app yang
+// dibuka manual -- selalu mulai dari nol.
+const MAX_FAILED_SWEEPS = 3;
+let failedSweeps = 0;
+
+// INTI FITUR: coba pindahkan koneksi ke WiFi kantor, lalu PASTIKAN backend benar-benar terjangkau.
+// Hanya resolve(true) kalau backend menjawab SETELAH perpindahan -- bukan sekadar "perintah netsh
+// tidak error". Selain itu selalu false, dan pemanggil akan menunggu di background.
+async function tryJoinOfficeWifiAndVerify() {
+    if (wifiJoinInProgress) return false;
+    wifiJoinInProgress = true;
+    try {
+        // [G0b] Masih dalam masa tenang setelah percobaan gagal sebelumnya.
+        if (Date.now() < joinCooldownUntil) return false;
+
+        // ===== LANGKAH 2: "cek SPRM-GUEST / hotspot HP" =====
+        // Satu scan untuk dua pertanyaan; hasilnya di-cache 8 dtk oleh scanVisibleNetworks().
+        // originalSsid dibaca SEBELUM apa pun diubah -- inilah yang nanti dikembalikan kalau
+        // percobaan gagal.
+        const [originalSsid, officeWifiNearby] = await Promise.all([
+            getCurrentSSID(), isOfficeWifiNearby()
+        ]);
+
+        // [G1] PENGAMAN TERPENTING, dan sengaja paling murah + paling mungkin gagal duluan:
+        // `netsh wlan connect` ke jaringan di luar jangkauan bisa MEMUTUS WiFi yang sedang
+        // dipakai. Tidak ada SSID kantor terlihat = tidak di kantor, dan "SSID asing" di situ
+        // cuma berarti WiFi rumah. Berhenti tanpa menyentuh apa pun.
+        //
+        // Syaratnya sengaja "ada SSID kantor MANAPUN yang terlihat", bukan "SPRM-CORP terlihat":
+        // `netsh wlan show networks` sering hanya melaporkan sebagian jaringan (hasil scan yang
+        // di-cache Windows, dan SSID tersembunyi tidak pernah muncul), jadi menuntut SPRM-CORP
+        // ada di daftar akan mematikan fitur ini diam-diam di banyak device. Terlihatnya SSID
+        // kantor sudah cukup membuktikan device ada di kantor -- itu properti yang kita butuhkan.
+        if (!officeWifiNearby) return false;
+
+        // [G2] Sudah di jaringan kantor yang sah? Berarti masalahnya di SERVER, bukan di WiFi.
+        if (!isSwitchableSsid(originalSsid)) return false;
+
+        // [G3] Tidak ada profil tersimpan -- berhenti SEBELUM apa pun diubah, koneksi user utuh.
+        if (!(await hasSavedProfile(TARGET_SSID))) return false;
+
+        log.info('Backend mati & device ada di kantor (SSID sekarang: '
+               + (originalSsid || 'tidak ada') + ') -- mencoba pindah ke ' + TARGET_SSID + '...');
+        if (!(await connectToSsid(TARGET_SSID))) {
+            // netsh menolak = koneksi user tidak berubah sama sekali, jadi tidak ada yang perlu
+            // dipulihkan dan percobaan ini tidak dihitung sebagai kegagalan.
+            log.info('Perintah pindah ke ' + TARGET_SSID + ' ditolak Windows.');
+            return false;
+        }
+
+        // `netsh wlan connect` melapor SUKSES duluan, sebelum asosiasi + DHCP selesai. Jeda
+        // singkat sekali di sini, sisanya ditunggu oleh loop verifikasi di bawah.
+        await delay(PROBE_GAP_MS);
+
+        // ===== LANGKAH 2b: CEK INTERNET di SPRM-CORP =====
+        // Loop ini merangkap dua tugas: menunggu DHCP benar-benar selesai, dan memutuskan apakah
+        // jaringan ini layak dipakai sama sekali.
+        let internetOk = false;
+        for (let i = 0; i < 3; i++) {
+            if (await hasInternetConnection()) { internetOk = true; break; }
+            await delay(PROBE_GAP_MS);
+        }
+        if (!internetOk) log.info(TARGET_SSID + ' tersambung tapi tidak ada internet.');
+
+        // ===== LANGKAH 2c: CEK BACKEND -- satu-satunya jalan menuju sukses =====
+        // Keberhasilan WAJIB dibuktikan lewat backend, bukan lewat exit code netsh.
+        if (internetOk || !REQUIRE_INTERNET_ON_TARGET) {
+            for (let i = 0; i < 2; i++) {
+                if (await checkServerConnection()) {
+                    log.info('Berhasil pindah ke ' + TARGET_SSID + ' dan backend terjangkau.');
+                    return true;
+                }
+                await delay(PROBE_GAP_MS);
+            }
+            log.info(TARGET_SSID + ' hidup tapi backend tetap tak terjangkau.');
+        }
+
+        // ===== JAMINAN INTERNET =====
+        // Perpindahan gagal. Mulai titik ini app BERHENTI mengejar backend; satu-satunya tujuan
+        // adalah memastikan user TETAP BISA INTERNETAN. Tiga lapis, masing-masing DIBUKTIKAN.
+        //
+        // Kegagalan dicatat TEPAT DI SINI, bukan di setiap `return false`. Yang dihitung hanyalah
+        // percobaan yang benar-benar sampai memindahkan WiFi lalu gagal; semua keluar lebih awal
+        // (di rumah, sudah di jaringan sah, profil tidak ada, netsh menolak) tidak pernah
+        // menyentuh koneksi user, jadi tidak boleh ikut menghabiskan jatah MAX_FAILED_SWEEPS.
+        joinCooldownUntil = Date.now() + JOIN_COOLDOWN_MS;
+        failedSweeps++;
+        log.info('Percobaan pemulihan gagal (' + failedSweeps + '/' + MAX_FAILED_SWEEPS + ').');
+
+        // Lapis 1 -- kalau SPRM-CORP ternyata masih punya internet (cuma backend-nya yang mati),
+        // tidak ada yang perlu dipindahkan. Nilainya sudah diketahui dari loop di atas.
+        if (internetOk) return false;
+
+        // Lapis 2 -- kembalikan jaringan yang tadi dipakai user, lalu BUKTIKAN internetnya hidup.
+        // Pengembalian yang gagal diam-diam (hotspot sudah dimatikan, sudah di luar jangkauan,
+        // profil terhapus) justru membuat keadaan user LEBIH BURUK daripada sebelum app bertindak.
+        if (originalSsid && await connectToSsid(originalSsid)) {
+            await delay(PROBE_GAP_MS);
+            for (let i = 0; i < 3; i++) {
+                if (await hasInternetConnection()) {
+                    log.info('Gagal -- koneksi dikembalikan ke ' + originalSsid + '.');
+                    return false;
+                }
+                await delay(PROBE_GAP_MS);
+            }
+        }
+
+        // Lapis 3 -- pilihan terakhir. Kita tersangkut di SSID yang terbukti tanpa backend DAN
+        // tanpa internet, sementara jaringan asal tidak bisa dipulihkan. Lepaskan saja, biar
+        // Windows memilih profil lain dan user melihat pemilih jaringan alih-alih ikon
+        // "tersambung" yang menipu.
+        await disconnectWifi();
+        log.warn('Tidak ada jaringan yang bisa dipakai: ' + TARGET_SSID + ' buntu dan jaringan '
+               + 'asal tidak bisa dipulihkan. WiFi dilepas supaya Windows bisa memilih sendiri.');
+        return false;
+    } finally {
+        // finally: kunci tetap dilepas walau ada error tak terduga di tengah jalan.
+        wifiJoinInProgress = false;
+    }
+}
+
+// Patroli saat app BELUM terbuka: app diam di background sampai backend benar-benar terjangkau.
+// Memakai setTimeout BERANTAI, bukan setInterval -- satu siklus bisa memakan ~65 detik (percobaan
+// pindah WiFi + verifikasi), dan setInterval akan menembakkan siklus baru di tengah siklus yang
+// belum selesai. Jeda melar 10s -> 60s selama masih gagal supaya laptop yang ditinggal menyala di
+// rumah tidak mengecek terus-menerus; direset ke 10s saat laptop bangun/di-unlock, momen paling
+// mungkin user baru tiba di kantor.
+const PATROL_MIN_MS = 10000;
+const PATROL_MAX_MS = 60000;
+let patrolDelayMs = PATROL_MIN_MS;
+let patrolActive = false;
+// Satu siklus patroli, disimpan di sini supaya resetPatrolBackoff() bisa menjadwalkan ulang
+// siklus yang SAMA. Penting: jangan pernah membuat rantai timer kedua -- kalau reset memanggil
+// startBackgroundPatrol() lagi selagi satu siklus masih berjalan (menunggu netsh/HTTP), rantai
+// lama dan rantai baru akan jalan berbarengan selamanya.
+let patrolTick = null;
+
+function startBackgroundPatrol() {
+    if (patrolActive) return; // sudah jalan, jangan didobelkan
+    patrolActive = true;
+    patrolDelayMs = PATROL_MIN_MS;
+    log.info('Di luar jaringan kantor. Aplikasi menunggu di background...');
+
+    patrolTick = async () => {
+        patrolTimer = null; // menandakan "sedang berjalan", bukan "sedang menunggu jeda"
+
+        // Cek yang murah dulu; kalau backend sudah terjangkau, koneksi WiFi tidak perlu disentuh.
+        const ready = await checkServerConnection() || await tryJoinOfficeWifiAndVerify();
+        if (!patrolActive) return; // dihentikan selagi kita menunggu (mis. app ditutup)
+
+        if (ready) {
+            log.info('Backend terjangkau -- memunculkan aplikasi.');
+            stopBackgroundPatrol();
+            createWindow();
+            return;
+        }
+
+        // Sudah tiga percobaan penuh yang gagal (~23 menit). Jaringan di tempat ini memang tidak
+        // bisa dipakai hari ini -- berhenti daripada mengintai tanpa hasil sampai baterai habis.
+        // Keputusan ini sengaja di sini, bukan di dalam tryJoinOfficeWifiAndVerify(): fungsi itu
+        // tugasnya menjawab boolean dan punya blok finally yang harus tetap jalan.
+        // App hidup lagi saat laptop dinyalakan ulang, saat dibuka manual, atau saat task
+        // "PICA Scheduler" menyalakannya jam 10:00 -- semuanya proses baru, jadi failedSweeps
+        // mulai dari nol dan seluruh rantai pengecekan diulang dari awal. Penutupan ini tidak
+        // terlihat user: jendela memang belum pernah dibuat, app cuma berhenti menghuni background.
+        if (failedSweeps >= MAX_FAILED_SWEEPS) {
+            log.warn('Menyerah setelah ' + failedSweeps + ' percobaan pemulihan yang gagal. '
+                   + 'Aplikasi ditutup; akan mencoba lagi saat dinyalakan berikutnya.');
+            stopBackgroundPatrol();
+            app.quit();
+            return;
+        }
+
+        patrolDelayMs = Math.min(Math.round(patrolDelayMs * 1.5), PATROL_MAX_MS);
+        patrolTimer = setTimeout(patrolTick, patrolDelayMs);
+    };
+
+    patrolTimer = setTimeout(patrolTick, patrolDelayMs);
+}
+
+function stopBackgroundPatrol() {
+    patrolActive = false;
+    if (patrolTimer) clearTimeout(patrolTimer);
+    patrolTimer = null;
+}
+
+// Laptop baru bangun/di-unlock: kemungkinan besar berpindah tempat, jadi jangan habiskan sisa jeda
+// yang terlanjur melar sampai 60 detik -- kembalikan ke ritme cepat. Aman dipanggil kapan saja:
+// kalau patroli tidak berjalan (app sudah terbuka), fungsi ini tidak melakukan apa-apa.
+function resetPatrolBackoff() {
+    if (!patrolActive) return;
+    patrolDelayMs = PATROL_MIN_MS;
+
+    // patrolTimer null berarti satu siklus sedang berjalan; siklus itu sendiri yang akan
+    // menjadwalkan ulang, dan sudah memakai patrolDelayMs yang baru. Jadi tidak ada yang
+    // perlu (dan tidak boleh) dijadwalkan di sini.
+    if (!patrolTimer) return;
+
+    clearTimeout(patrolTimer);
+    patrolTimer = setTimeout(patrolTick, patrolDelayMs);
 }
 
 // =========================================================
@@ -486,49 +845,24 @@ if (!gotTheLock) {
     // 2. MULAI PENGECEKAN UPDATE OTOMATIS DARI GITHUB RELEASES
     if (app.isPackaged) setupAutoUpdater();
 
-    // 3. CEK KONEKSI PERTAMA KALI SAAT LAPTOP MENYALA (SSID + scan WiFi sekitar dicek paralel, sekali saja saat boot)
-    const [isConnectedToOffice, ssid, officeWifiNearby] = await Promise.all([
-        checkServerConnection(),
-        getCurrentSSID(),
-        isOfficeWifiNearby(),
-    ]);
+    // 3. PATROLI JARINGAN: reset ritme pengecekan saat laptop bangun/di-unlock. Didaftarkan di
+    // sini (bukan di createWindow) karena justru dibutuhkan SELAGI app belum terbuka.
+    powerMonitor.on('resume', resetPatrolBackoff);
+    powerMonitor.on('unlock-screen', resetPatrolBackoff);
 
-    if (isConnectedToOffice) {
-        // Jika langsung terhubung (misal pakai PC kantor yang selalu colok kabel LAN)
-        console.log("Terhubung ke jaringan kantor. Membuka layar utama...");
+    // 4. CEK KONEKSI PERTAMA KALI SAAT LAPTOP MENYALA.
+    // Aturan tunggal: app TIDAK PERNAH dibuka sebelum backend benar-benar terjangkau. Kalau
+    // belum, app mencoba memindahkan koneksi ke WiFi kantor; kalau itu pun gagal, app diam di
+    // background dan terus mencoba, bukan membuka jendela kosong tanpa data.
+    if (await checkServerConnection()) {
+        // Langsung terhubung (misal PC kantor yang selalu colok kabel LAN).
+        log.info('Terhubung ke jaringan kantor. Membuka layar utama...');
         createWindow();
-    } else if (ssid === 'SPRM-GUEST') {
-        // SSID Guest memang tidak pernah bisa menjangkau backend internal -- tetap buka
-        // app-nya (walau datanya kosong karena tak ada backend), tapi kunci Exit App &
-        // Logout sepenuhnya sampai app di-restart di jaringan yang benar.
-        console.log("Terhubung ke SPRM-GUEST (backend tak terjangkau dari SSID ini). Membuka dalam mode Guest terkunci...");
-        isGuestLocked = true;
-        createWindow();
-    } else if (officeWifiNearby) {
-        // WiFi kantor TERLIHAT di sekitar (device secara fisik ada di kantor), tapi lagi
-        // tersambung ke jaringan lain (mis. hotspot HP) sehingga backend tak terjangkau --
-        // tetap buka app dalam mode Guest terkunci, bukan menghilang selamanya.
-        console.log("WiFi kantor terdeteksi di sekitar, tapi device tersambung ke jaringan lain sehingga backend tak terjangkau. Membuka dalam mode Guest terkunci...");
-        isGuestLocked = true;
+    } else if (await tryJoinOfficeWifiAndVerify()) {
+        // Satu percobaan langsung di sini supaya tidak perlu menunggu tick patroli pertama.
         createWindow();
     } else {
-        // JIKA TIDAK TERHUBUNG (Misal di rumah atau di jalan)
-        console.log("Di luar jaringan. Aplikasi bersembunyi dan menunggu sinyal...");
-
-        // Buat radar pengecekan setiap 10 detik (10.000 milidetik)
-        const patroliJaringan = setInterval(async () => {
-            const connectedNow = await checkServerConnection();
-
-            if (connectedNow) {
-                console.log("WiFi Kantor terdeteksi! Memunculkan aplikasi...");
-
-                // Matikan radar agar tidak terus-menerus mengecek setelah terbuka
-                clearInterval(patroliJaringan);
-
-                // Buka antarmuka aplikasi!
-                createWindow();
-            }
-        }, 10000); // Anda bisa mengubah angka ini (misal 30000 untuk 30 detik)
+        startBackgroundPatrol();
     }
 
     app.on('activate', () => {
@@ -538,6 +872,12 @@ if (!gotTheLock) {
 
   app.on('before-quit', () => {
     isQuitting = true;
+    // Lepas semua timer supaya tidak ada pekerjaan yang masih terjadwal saat app ditutup.
+    stopBackgroundPatrol();
+    if (runtimeNetworkMonitor) {
+      clearInterval(runtimeNetworkMonitor);
+      runtimeNetworkMonitor = null;
+    }
   });
 
   app.on('window-all-closed', () => {
