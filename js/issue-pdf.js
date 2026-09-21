@@ -167,8 +167,11 @@ export async function exportSingleIssueToPDF() {
 
     try {
         const { ipcRenderer } = window.require('electron');
-        const pdfBase64 = doc.output('datauristring');
-        const result = await ipcRenderer.invoke('simpan-pdf', pdfBase64, `PICA-Report-Detail-${issue.id}.pdf`);
+        // 'arraybuffer', bukan 'datauristring': yang terakhir men-base64-kan seluruh PDF
+        // (mekar ~1,33x) lalu string sebesar itu diserialisasi menyeberangi IPC. Sisi
+        // penerimanya, tulisBerkas() di main.js, menerima typed array apa adanya.
+        const isiPdf = new Uint8Array(doc.output('arraybuffer'));
+        const result = await ipcRenderer.invoke('simpan-pdf', isiPdf, `PICA-Report-Detail-${issue.id}.pdf`);
         
         if (result.success) {
             showCustomAlert("Success", "PDF file has been successfully saved!");
@@ -620,8 +623,11 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
     try {
         // A. Simpan PDF ke Windows secara lokal
         const { ipcRenderer } = window.require('electron');
-        const pdfBase64 = doc.output('datauristring');
-        const result = await ipcRenderer.invoke('simpan-pdf', pdfBase64, `Minutes_Of_Meeting_${new Date().getTime()}.pdf`);
+        // 'arraybuffer', bukan 'datauristring': yang terakhir men-base64-kan seluruh PDF
+        // (mekar ~1,33x) lalu string sebesar itu diserialisasi menyeberangi IPC. Sisi
+        // penerimanya, tulisBerkas() di main.js, menerima typed array apa adanya.
+        const isiPdf = new Uint8Array(doc.output('arraybuffer'));
+        const result = await ipcRenderer.invoke('simpan-pdf', isiPdf, `Minutes_Of_Meeting_${new Date().getTime()}.pdf`);
         
         if (result.success) {
             

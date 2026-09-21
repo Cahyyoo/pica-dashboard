@@ -50,7 +50,9 @@
         </div>
 
     <footer style="display: flex; justify-content: center;">
-        <div style="text-align: center;">PICA System v2.3.0</div>
+        <!-- Teks di bawah hanya FALLBACK kalau IPC tak tersedia (mis. halaman dibuka di luar
+             Electron). Nilai sebenarnya diisi dari app.getVersion() oleh js/app.js. -->
+        <div style="text-align: center;" id="app-version">PICA System v2.3.1</div>
     </footer>
 
     <div id="modals-container"></div>

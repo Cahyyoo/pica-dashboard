@@ -1,29 +1,26 @@
 // js/issue-dashboard.js
 import { API_URL, getAuthHeaders } from './config.js';
-import { showCustomAlert, showView, getStatusBadge, getDailyUpdateBadge, formatWitaDate, formatWitaDateTime, debounce, escapeHtml, blokTugasPic, tugasTertunda, LABEL_KATEGORI, URUTAN_KATEGORI, BLOK_BELUM, ambilIssueRingkas, lupakanCacheIssue } from './utils.js';
+import { showCustomAlert, showView, getStatusBadge, getDailyUpdateBadge, formatWitaDate, formatWitaDateTime, debounce, escapeHtml, blokTugasPic, tugasTertunda, LABEL_KATEGORI, URUTAN_KATEGORI, BLOK_BELUM, urutkanIssueStatusTanggal, msDibuat, ambilIssueRingkas, lupakanCacheIssue, ambilUsers } from './utils.js';
 import { state } from './issue-state.js';
 import { openDetailView } from './issue-detail.js';
 import { exportFilteredIssuesToPDF } from './issue-pdf.js';
 import { exportFilteredIssuesToExcel } from './issue-excel-export.js';
 
-// Urutan tampil status di semua tabel: yang paling butuh perhatian di atas, yang sudah
-// selesai di bawah. "Continue" ditaruh di antara Progress dan Closed -- masih aktif, tapi
-// sengaja diparkir untuk dilanjutkan besok.
-//
-// Sebelumnya map ini disalin PERSIS SAMA di 5 fungsi berbeda di berkas ini. Cukup satu
-// salinan terlewat saat status baru ditambah, satu tabel akan salah urut tanpa ketahuan.
-const STATUS_ORDER = { 'Open': 1, 'Progress': 2, 'Continue': 3, 'Closed': 4 };
-// Status di luar daftar (mis. sisa import lama) ditaruh paling akhir. Angkanya HARUS di
-// atas bobot Closed, kalau tidak status tak dikenal akan seri dengan Closed.
-const STATUS_ORDER_LAINNYA = 5;
+// Urutan status dan pembandingnya kini tinggal satu salinan di utils.js
+// (STATUS_ORDER / urutkanIssueStatusTanggal) -- lihat komentarnya di sana.
+
+// Satu-satunya tempat yang menulis state.globalUsers/state.userById. Diekspor supaya
+// loadAdminUsers() di auth.js -- yang mengambil datanya sendiri agar selalu segar -- ikut
+// mengisi peta yang sama. Dulu jalur Admin tidak mengisinya sama sekali, sehingga membuka
+// layar Admin lebih dulu membuat nama PIC di tabel lain kosong sampai ada layar lain memuat.
+export function simpanUsersKeState(users) {
+    state.globalUsers = users;
+    state.userById = new Map(users.map(u => [String(u.id), u]));
+}
 
 export async function fetchUsersForMapping() {
     try {
-        const res = await fetch(`${API_URL}/auth/users`);
-        if (res.ok) {
-            state.globalUsers = await res.json();
-            state.userById = new Map(state.globalUsers.map(u => [String(u.id), u]));
-        }
+        simpanUsersKeState(await ambilUsers());
     } catch (error) { console.warn("Gagal mapping user:", error); }
 }
 
@@ -44,15 +41,7 @@ export async function openUserHistory() {
         const currentUserId = String(localStorage.getItem('user_id'));
         const myIssues = state.globalIssues.filter(i => String(i.issuedBy) === currentUserId);
 
-        myIssues.sort((a, b) => {
-            const weightA = STATUS_ORDER[a.status] || STATUS_ORDER_LAINNYA;
-            const weightB = STATUS_ORDER[b.status] || STATUS_ORDER_LAINNYA;
-            
-            if (weightA !== weightB) {
-                return weightA - weightB;
-            }
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        });
+        urutkanIssueStatusTanggal(myIssues);
 
         if (myIssues.length === 0) {
             tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #6b7280; padding: 24px;">You haven't created any reports yet.</td></tr>`;
@@ -164,24 +153,41 @@ export function applyFilterMD() {
     // semua issue lalu hasilnya dibuang.
     const adaPencarian = searchFilter !== '';
 
+    // Batas tanggal dihitung SEKALI, bukan dibangun ulang per issue. Versi lama membuat TIGA
+    // objek Date untuk setiap issue setiap kali filter dijalankan -- dan filter ini ikut jalan
+    // tiap ketukan di kotak search. Kembarannya, saringIssueUntukEkspor() di utils.js, sudah
+    // lama memakai pola ini; applyFilterMD() terlewat.
+    //
+    // Batas harinya sengaja WAKTU LOKAL (setHours), BUKAN WITA -- sama persis dengan
+    // kembarannya. Jangan "diperbaiki" hanya di sini: layar dan hasil ekspor harus menyaring
+    // dengan aturan yang sama, dan itu justru bug yang dicegah komentar di utils.js.
+    let startMs = null, endMs = null;
+    if (startDateFilter) { const d = new Date(startDateFilter); d.setHours(0, 0, 0, 0);      startMs = d.getTime(); }
+    if (endDateFilter)   { const d = new Date(endDateFilter);   d.setHours(23, 59, 59, 999); endMs   = d.getTime(); }
+
     // 2. Saring data globalIssues
     const filteredIssues = state.globalIssues.filter(item => {
         const matchStatus = (statusFilter === 'All') || (item.status === statusFilter);
         const matchScale = (scaleFilter === 'All') || (item.priority === scaleFilter);
         const matchCategory = (categoryFilter === 'All') || (item.category === categoryFilter);
 
+        // Perbandingan Date >= Date di versi lama sebenarnya membandingkan milidetik, jadi
+        // bentuk ini setara -- TAPI perhatikan bentuk negasinya, itu bukan gaya penulisan.
+        //
+        // Versi lama menulis `matchDate = d >= start && d <= end`. Untuk createdAt yang rusak,
+        // msDibuat() menghasilkan NaN, SEMUA perbandingan dengan NaN bernilai false, sehingga
+        // matchDate ikut false dan barisnya DIBUANG. Kalau di sini ditulis `if (t < startMs)`,
+        // NaN membuat syaratnya tidak pernah menyala dan baris rusak itu justru IKUT TAMPIL --
+        // kebalikan dari perilaku lama. `!(t >= startMs)` mempertahankannya apa adanya.
+        //
+        // CATATAN: kembarannya saringIssueUntukEkspor() di utils.js memakai bentuk `t < startMs`,
+        // jadi untuk tanggal rusak layar dan ekspor memang sudah lama berbeda. Itu perbedaan
+        // yang SUDAH ADA, bukan dibuat di sini, dan sengaja tidak disentuh dari sini.
         let matchDate = true;
-        if (startDateFilter || endDateFilter) {
-            const issueDate = new Date(item.createdAt);
-            const start = startDateFilter ? new Date(startDateFilter) : null;
-            if (start) start.setHours(0, 0, 0, 0);
-
-            const end = endDateFilter ? new Date(endDateFilter) : null;
-            if (end) end.setHours(23, 59, 59, 999);
-
-            if (start && end) matchDate = issueDate >= start && issueDate <= end;
-            else if (start) matchDate = issueDate >= start;
-            else if (end) matchDate = issueDate <= end;
+        if (startMs !== null || endMs !== null) {
+            const t = msDibuat(item);
+            if (startMs !== null && !(t >= startMs)) matchDate = false;
+            if (endMs !== null && !(t <= endMs)) matchDate = false;
         }
 
         // --- LOGIKA SEARCH TEXT ---
@@ -209,21 +215,7 @@ export function applyFilterMD() {
         return matchStatus && matchScale && matchCategory && matchDate && matchSearch;
     });
 
-    filteredIssues.sort((a, b) => {
-        const weightA = STATUS_ORDER[a.status] || STATUS_ORDER_LAINNYA;
-        const weightB = STATUS_ORDER[b.status] || STATUS_ORDER_LAINNYA;
-        
-        // 1. Prioritas Pertama: Urutkan berdasarkan Status
-        if (weightA !== weightB) {
-            return weightA - weightB;
-        }
-        
-        // 2. Prioritas Kedua: Jika statusnya SAMA, urutkan berdasarkan Tanggal (Terbaru ke Terlama)
-        const dateA = new Date(a.createdAt).getTime();
-        const dateB = new Date(b.createdAt).getTime();
-        
-        return dateB - dateA; // Hasil positif akan menempatkan tanggal terbaru di atas
-    });
+    urutkanIssueStatusTanggal(filteredIssues);
 
     // Setiap kali filter/pencarian berubah, kembali ke halaman 1
     state.mdFilteredIssues = filteredIssues;
@@ -404,15 +396,7 @@ export function filterUserHistory() {
         return isMine && matchSearch;
     });
 
-    filteredIssues.sort((a, b) => {
-        const weightA = STATUS_ORDER[a.status] || STATUS_ORDER_LAINNYA;
-        const weightB = STATUS_ORDER[b.status] || STATUS_ORDER_LAINNYA;
-        
-        if (weightA !== weightB) {
-            return weightA - weightB;
-        }
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+    urutkanIssueStatusTanggal(filteredIssues);
 
     state.currentIssueIds = filteredIssues.map(i => i.id);
 
@@ -734,15 +718,7 @@ export function filterPICHistory() {
         return isMyTask && matchSearch;
     });
 
-    filteredIssues.sort((a, b) => {
-        const weightA = STATUS_ORDER[a.status] || STATUS_ORDER_LAINNYA;
-        const weightB = STATUS_ORDER[b.status] || STATUS_ORDER_LAINNYA;
-
-        if (weightA !== weightB) {
-            return weightA - weightB;
-        }
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
+    urutkanIssueStatusTanggal(filteredIssues);
 
     renderPICTable(filteredIssues);
 }
@@ -784,18 +760,7 @@ export async function loadDashboardPIC() {
             return (isCurrentPic || isPastPic);
         });
 
-        activeIssues.sort((a, b) => {
-            const weightA = STATUS_ORDER[a.status] || STATUS_ORDER_LAINNYA;
-            const weightB = STATUS_ORDER[b.status] || STATUS_ORDER_LAINNYA;
-
-            // 1. Urutkan berdasarkan Status
-            if (weightA !== weightB) {
-                return weightA - weightB;
-            }
-
-            // 2. Jika status sama, urutkan berdasarkan Tanggal Terbaru
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        });
+        urutkanIssueStatusTanggal(activeIssues);
 
         renderPICTable(activeIssues);
     } catch (error) { console.error("Failed to load PIC dashboard:", error); }
@@ -823,22 +788,26 @@ export async function loadMOMArchives() {
         const result = await response.json();
         
         if (result.success && result.data.length > 0) {
-            tbody.innerHTML = ''; // Bersihkan tabel
-            
             // Sekarang isinya METADATA saja (tanpa dataIssues) -- cukup untuk daftar.
             // Detail lengkap diambil per-arsip lewat fetchMOMArchiveDetail() saat diklik.
             state.cachedMOMArchives = result.data;
 
+            // Kumpulkan ke satu string lalu assign SEKALI -- pola yang sama dengan semua tabel
+            // lain di berkas ini (lihat catatan di renderMDTable). Ini SATU-SATUNYA tabel yang
+            // masih memakai createElement + appendChild per baris.
+            //
+            // Jujur saja: daftar arsip isinya metadata dan jumlahnya sedikit, jadi keuntungan
+            // kecepatannya di sini praktis nol. Alasannya konsistensi -- supaya tidak ada satu
+            // pola menyimpang yang tertinggal untuk disalin orang berikutnya.
+            let html = '';
             result.data.forEach((arsip, index) => {
-                const tr = document.createElement('tr');
-                
                 // Format tanggal export menjadi format yang rapi (English)
                 const exportDate = formatWitaDateTime(arsip.tanggalExport || arsip.tanggal_export, 'en-GB', {
                     day: '2-digit', month: 'short', year: 'numeric',
                     hour: '2-digit', minute: '2-digit'
                 });
 
-                tr.innerHTML = `
+                html += `<tr>
                     <td style="text-align:center;">${index + 1}</td>
                     <td style="font-weight: 500;">${exportDate}</td>
                     <td>${escapeHtml(arsip.chairman || '-')}</td>
@@ -847,9 +816,9 @@ export async function loadMOMArchives() {
                     <td style="text-align:center;">
                         <button class="btn-sm" style="background-color: #1591DC;" onclick="viewMOMDetail(${arsip.id})">View Detail</button>
                     </td>
-                `;
-                tbody.appendChild(tr);
+                </tr>`;
             });
+            tbody.innerHTML = html;
         } else {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#6b7280; padding:20px;">No MOM archives found in the server.</td></tr>';
         }
@@ -917,13 +886,18 @@ export async function viewMOMDetail(id) {
         let html = '';
         for (let idx = 0; idx < issues.length; idx++) {
             const item = issues[idx];
-            const prioBadge = item.priority ? `<span class="badge badge-prio">${item.priority}</span>` : '-';
+            // escapeHtml(), sama seperti setiap tabel lain di app. Kedua nilai di bawah dulu
+            // disisipkan MENTAH ke innerHTML -- satu-satunya tempat yang tersisa seperti itu.
+            // Judul issue diketik user, jadi judul yang memuat < atau & merusak tampilan baris.
+            // Ini MENGUBAH keluaran yang terlihat: teks yang dulu tercetak sebagai markup kini
+            // tampil sebagai teks apa adanya, yang memang yang seharusnya.
+            const prioBadge = item.priority ? `<span class="badge badge-prio">${escapeHtml(item.priority)}</span>` : '-';
 
             // PERBAIKAN: Baris tabel dicetak dengan padding yang lebih luas dan border bawah tipis
             html += `
                 <tr style="border-bottom: 1px solid #e5e7eb; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#f9fafb'" onmouseout="this.style.backgroundColor='transparent'">
                     <td style="padding: 12px 16px; text-align: center; color: #4b5563;">${idx + 1}</td>
-                    <td style="padding: 12px 16px; font-weight: 500; color: #111827;">${item.caseNotification || '-'}</td>
+                    <td style="padding: 12px 16px; font-weight: 500; color: #111827;">${escapeHtml(item.caseNotification || '-')}</td>
                     <td style="padding: 12px 16px; text-align: center;">${getStatusBadge(item.status)}</td>
                     <td style="padding: 12px 16px; text-align: center;">${prioBadge}</td>
                 </tr>

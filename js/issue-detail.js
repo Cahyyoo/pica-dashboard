@@ -1,6 +1,6 @@
 // js/issue-detail.js
 import { API_URL, getAuthHeaders } from './config.js';
-import { showView, getStatusBadge, formatWitaDate, escapeHtml, isEditableLastUpdate, showCustomAlert } from './utils.js';
+import { showView, getStatusBadge, formatWitaDate, escapeHtml, buatPengecekEditable, showCustomAlert } from './utils.js';
 import { state } from './issue-state.js';
 
 // Berapa entri riwayat yang digambar lebih dulu di layar detail; sisanya menyusul lewat tombol.
@@ -203,7 +203,7 @@ function gambarTimeline(issue) {
         const semuaHist = issue.histories;
         const perluDipotong = !timelinePenuh && semuaHist.length > TIMELINE_AWAL;
 
-        // Urutan riwayat dari backend TIDAK dipercaya -- isEditableLastUpdate() pun menghitung
+        // Urutan riwayat dari backend TIDAK dipercaya -- buatPengecekEditable() pun menghitung
         // entri terbaru sendiri alih-alih mengandalkan posisi. Jadi ujung mana yang "lama"
         // ditentukan dari stempel waktunya, lalu SELALU ujung lama itu yang disembunyikan,
         // sehingga urutan tampil yang sudah dikenal user tidak berubah sedikit pun. Entri
@@ -219,6 +219,11 @@ function gambarTimeline(issue) {
             daftarTampil = lamaDiAwal ? semuaHist.slice(tersembunyi) : semuaHist.slice(0, TIMELINE_AWAL);
         }
 
+        // Dihitung SEKALI di luar loop, bukan sekali per entri: syarat tingkat-issue (backend,
+        // peran, PIC, status) dan pencarian entri terbaru tidak berubah sepanjang render ini.
+        // Lihat buatPengecekEditable() di utils.js untuk alasan lengkapnya.
+        const bolehEdit = buatPengecekEditable(issue);
+
         let timelineHTML = '';
         daftarTampil.forEach((hist) => {
             const updateStr = formatWitaDate(hist.createdAt, 'en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -231,7 +236,7 @@ function gambarTimeline(issue) {
                 : '';
 
             // Only ever on the newest entry, and only when the request would actually succeed.
-            const editBtnHTML = isEditableLastUpdate(issue, hist)
+            const editBtnHTML = bolehEdit(hist)
                 ? `<button type="button" class="btn-sm btn-secondary" style="margin-top:10px;" onclick="openEditUpdateModal(${hist.id}); return false;">Edit this update</button>`
                 : '';
             

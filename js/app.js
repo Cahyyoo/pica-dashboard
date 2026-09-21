@@ -1,4 +1,10 @@
-import { showView, showCustomAlert, closeCustomAlert, navigateToRole, loadComponent, showCustomConfirm, closeCustomConfirm } from './utils.js';
+// API_URL dipakai oleh startBackgroundMonitor() di bawah. Import ini SEMPAT TIDAK ADA, dan
+// akibatnya tidak pernah kelihatan: ReferenceError-nya terjadi di dalam blok try alarm jam 10,
+// lalu ditangkap catch yang satu-satunya tafsirannya "user sedang di luar jaringan kantor".
+// Jadi pemantau itu diam-diam menyerah setiap menit, dan alarm jam 10 tidak pernah berbunyi
+// sekali pun sejak fiturnya dirilis -- tanpa satu baris error pun di konsol.
+import { API_URL } from './config.js';
+import { showView, showCustomAlert, closeCustomAlert, navigateToRole, ambilKomponen, showCustomConfirm, closeCustomConfirm } from './utils.js';
 import { handleLogin, handleLogout, handleExitApp, loadAdminUsers, submitNewUser, deleteUser, openEditUserModal, closeEditUserModal, submitEditUser, loadLoginLogs, filterLoginLogs, filterLoginLogsDebounced, refreshLoginLogs, changeLoginLogsDate, changeLoginLogsPage, changeLoginLogsPageSize, trackAppOpen, isGuestLockedNow } from './auth.js';
 import {
     loadDepartments, submitIssue, loadDashboardMD, loadDashboardPIC,
@@ -155,10 +161,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // TAHAP A: INJEKSI HTML (WAJIB DITUNGGU DENGAN AWAIT)
     // Jangan jalankan kode apapun sebelum struktur DOM (HTML) ini selesai dibentuk
-    await loadComponent('app-content', './views/auth.html');
-    await loadComponent('app-content', './views/menus.html');
-    await loadComponent('app-content', './views/dashboards.html');
-    await loadComponent('modals-container', './views/modals.html');
+    // Keempat berkas ini saling bebas, jadi diambil BERSAMAAN. Sebelumnya berurutan: berkas
+    // kedua baru mulai setelah yang pertama selesai sepenuhnya.
+    //
+    // Penyuntikannya TETAP berurutan dan urutannya tidak boleh diubah: auth, menus, dan
+    // dashboards sama-sama menumpuk ke #app-content lewat insertAdjacentHTML('beforeend'),
+    // jadi urutan di sini yang menentukan urutan layar di DOM.
+    //
+    // Jujur soal untungnya: ini empat pembacaan disk lokal (~62 KB total), bukan permintaan
+    // jaringan. Hematnya kecil dan bisa tenggelam di derau pengukuran. Dikerjakan karena
+    // gratis, bukan karena akan terasa.
+    const [htmlAuth, htmlMenus, htmlDashboards, htmlModals] = await Promise.all([
+        ambilKomponen('./views/auth.html'),
+        ambilKomponen('./views/menus.html'),
+        ambilKomponen('./views/dashboards.html'),
+        ambilKomponen('./views/modals.html'),
+    ]);
+    const appContent = document.getElementById('app-content');
+    appContent.insertAdjacentHTML('beforeend', htmlAuth);
+    appContent.insertAdjacentHTML('beforeend', htmlMenus);
+    appContent.insertAdjacentHTML('beforeend', htmlDashboards);
+    document.getElementById('modals-container').insertAdjacentHTML('beforeend', htmlModals);
 
     // TAHAP B: JALANKAN LOGIKA DATA SETELAH HTML SIAP
     // Karena HTML sudah terbentuk, JS kini bisa menemukan elemen seperti 'issue-dept'
@@ -206,6 +229,12 @@ function startBackgroundMonitor() {
         const role = localStorage.getItem('user_role');
         if (role !== 'Dept Head') return; 
 
+        // CATATAN ZONA WAKTU (sengaja dibiarkan, jangan "diperbaiki" sambil lalu):
+        // getHours() dan toDateString() di sini memakai waktu OS, sementara seluruh app lain
+        // memaksa WITA lewat rentangHariWita()/formatWitaDate() di utils.js. Di sini keduanya
+        // KONSISTEN satu sama lain -- tes jam dan kunci `last_kiosk_alarm` sama-sama waktu OS --
+        // jadi alarm tetap berbunyi sekali sehari menurut jam kiosk itu sendiri. Mengubahnya ke
+        // WITA adalah keputusan tersendiri: di kiosk yang jamnya meleset, alarm ikut meleset.
         const now = new Date();
         const todayStr = now.toDateString();
         const lastAlarmDate = localStorage.getItem('last_kiosk_alarm');
@@ -223,7 +252,13 @@ function startBackgroundMonitor() {
                 const pingRes = await fetch(`${API_URL}/department`, { method: 'GET' });
                 if (!pingRes.ok) return; 
             } catch (err) {
-                // Jika gagal terhubung ke server lokal, asumsikan user berada di luar kantor
+                // Jika gagal terhubung ke server lokal, asumsikan user berada di luar kantor.
+                //
+                // HATI-HATI saat mengubah blok try di atas: catch ini menelan APA PUN, termasuk
+                // error program (dulu ReferenceError dari API_URL yang belum di-import). Selama
+                // bertahun-tahun ia menyamarkan bug itu jadi "user di luar kantor" yang masuk akal.
+                // Kalau nanti ada yang ditambahkan ke try di atas, pastikan hanya kegagalan
+                // JARINGAN yang boleh sampai ke sini.
                 console.log("User is outside the office network. Alarm canceled.");
                 return; // Berhenti di sini, layar tidak akan dikunci
             }
@@ -330,6 +365,16 @@ try {
 // =========================================================
 try {
     const { ipcRenderer } = window.require('electron');
+
+    // 0. Versi di footer, diambil dari app.getVersion() -- sumber yang SAMA dengan yang dipakai
+    //    electron-updater. Ditaruh di blok ini karena di sinilah urusan update ditangani.
+    //    Kalau gagal, teks fallback di index.html dibiarkan apa adanya.
+    ipcRenderer.invoke('app-version')
+        .then(versi => {
+            const el = document.getElementById('app-version');
+            if (el && versi) el.innerText = `PICA System v${versi}`;
+        })
+        .catch(err => console.warn("Gagal membaca versi app:", err));
 
     // 1. Munculkan layar gelap saat download dimulai
     ipcRenderer.on('update-mulai-download', () => {

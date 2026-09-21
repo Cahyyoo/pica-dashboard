@@ -1,6 +1,6 @@
 import { API_URL, getAuthHeaders } from './config.js';
-import { showCustomAlert, navigateToRole, showCustomConfirm, formatWitaDate, formatWitaDateTime, debounce, escapeHtml } from './utils.js';
-import { checkDailyUpdates, ringkasanTertunda, fetchUsersForMapping, perbaruiBadgeMenuPic } from './issues.js';
+import { showCustomAlert, navigateToRole, showCustomConfirm, formatWitaDate, formatWitaDateTime, debounce, escapeHtml, ambilUsers, lupakanCacheUser } from './utils.js';
+import { checkDailyUpdates, ringkasanTertunda, fetchUsersForMapping, perbaruiBadgeMenuPic, simpanUsersKeState } from './issues.js';
 import { state } from './issue-state.js';
 // -------------------------------------------
 
@@ -156,8 +156,18 @@ Open Update Task List — the category cards show which ones, and inside each li
 
 export async function loadAdminUsers() {
     try {
-        const res = await fetch(`${API_URL}/auth/users`);
-        const users = await res.json();
+        // Layar Admin sengaja DIKECUALIKAN dari cache user: ini satu-satunya layar tempat user
+        // dibuat, diubah, dan dihapus, jadi ia harus selalu memperlihatkan keadaan sebenarnya
+        // di server -- bukan salinan berumur sampai satu TTL. Cache dihanguskan lebih dulu,
+        // lalu diisi ulang oleh permintaan ini, sehingga layar lain ikut kebagian data segar.
+        //
+        // Sengaja lewat ambilUsers() dan bukan fetchUsersForMapping(): yang terakhir menelan
+        // galat jaringan, sedangkan di sini kegagalan HARUS merambat ke catch di bawah supaya
+        // tabelnya dibiarkan utuh, bukan digambar ulang dari data basi.
+        lupakanCacheUser();
+        const users = await ambilUsers();
+        // Sekalian isi peta id->user yang dipakai tabel lain. Dulu jalur ini tidak mengisinya.
+        simpanUsersKeState(users);
         const tbody = document.querySelector('#view-admin tbody');
         // Kumpulkan ke satu string lalu assign SEKALI (pola sama dengan renderMDTable()).
         let html = '';
@@ -206,6 +216,11 @@ export async function submitNewUser() {
 
         if (response.ok) {
             showCustomAlert("Success", `User ${username} registered successfully!`);
+            // Cache user dihanguskan tepat setelah tulisan BERHASIL. loadAdminUsers() di bawah
+            // memang menghanguskannya juga, tapi penjagaan di sini membuat perubahan langsung
+            // terlihat di layar LAIN (dropdown PIC, nama di tabel MD) dan tetap benar seandainya
+            // pemuatan ulang itu suatu saat dilepas.
+            lupakanCacheUser();
             document.getElementById('admin-new-username').value = '';
             document.getElementById('admin-new-password').value = '';
             document.getElementById('admin-new-role').value = '';
@@ -230,6 +245,11 @@ export async function deleteUser(id, username) {
 
             if (response.ok) {
                 showCustomAlert("Success", `Account ${username} has been deleted.`);
+                // Cache user dihanguskan tepat setelah tulisan BERHASIL. loadAdminUsers() di bawah
+                // memang menghanguskannya juga, tapi penjagaan di sini membuat perubahan langsung
+                // terlihat di layar LAIN (dropdown PIC, nama di tabel MD) dan tetap benar seandainya
+                // pemuatan ulang itu suatu saat dilepas.
+                lupakanCacheUser();
                 loadAdminUsers();
             } else {
                 showCustomAlert("Failed", "Cannot delete this user.");
@@ -279,6 +299,11 @@ export async function submitEditUser() {
             closeEditUserModal();
             document.getElementById('edit-user-password').value = '';
             showCustomAlert("Success", `Account data for ${username} updated successfully!`);
+            // Cache user dihanguskan tepat setelah tulisan BERHASIL. loadAdminUsers() di bawah
+            // memang menghanguskannya juga, tapi penjagaan di sini membuat perubahan langsung
+            // terlihat di layar LAIN (dropdown PIC, nama di tabel MD) dan tetap benar seandainya
+            // pemuatan ulang itu suatu saat dilepas.
+            lupakanCacheUser();
             loadAdminUsers(); // Muat ulang tabel
         } else {
             const errorData = await response.json();

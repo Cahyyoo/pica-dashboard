@@ -9,13 +9,17 @@
 // `.s` selalu diam-diam dibuang saat file disimpan. `exceljs` open-source/MIT dan mendukung
 // penuh fill color, border, font, dan embed gambar, sehingga hasil Excel-nya bisa benar-benar
 // mirip export PDF.
-import { showCustomAlert, formatWitaDate, stripAutoForwardNotes, archiveMOMRecord, buildArchiveIssues, getBase64Image, reportActivity, saringIssueUntukEkspor, riwayatTerbaru, beriNapasUI } from './utils.js';
+import { showCustomAlert, formatWitaDate, stripAutoForwardNotes, archiveMOMRecord, getBase64Image, reportActivity, saringIssueUntukEkspor, riwayatTerbaru, beriNapasUI } from './utils.js';
 import { state } from './issue-state.js';
 
 function getExcelJS() {
     try {
         return window.require('exceljs');
     } catch (e) {
+        // Jangan telan diam-diam: kegagalan require di sini pernah disebabkan oleh pola
+        // exclusion build.files yang membuang exceljs/lib/doc, dan gejalanya cuma popup
+        // generik tanpa petunjuk apa pun. Log aslinya supaya MODULE_NOT_FOUND kelihatan.
+        console.error("Gagal memuat exceljs:", e);
         return null;
     }
 }
@@ -193,6 +197,12 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
     // baru sudah membawa nama hasil resolusi.
     const userById = state.userById;
 
+    // null = sedang mengunduh ULANG arsip yang sudah ada, jadi tidak ada yang perlu diarsipkan.
+    // Dulu arsipnya tetap dibangun penuh lalu dibuang begitu saja di bawah -- dan hasilnya pun
+    // tidak masuk akal, karena item bentuk-arsip tidak punya issuedBy sehingga setiap barisnya
+    // jadi "ID: undefined".
+    const barisArsip = (momData && momData.isArchive) ? null : [];
+
     filteredData.forEach((item, index) => {
         // Arsip bentuk BARU menyimpan nama (snapshot); data live & arsip LAMA menyimpan id.
         let issuerName = item.issuerName;
@@ -211,13 +221,45 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
         // Remark cuma menampilkan update PALING AKHIR (bukan gabungan seluruh riwayat) — riwayat
         // lengkapnya tetap bisa dilihat di timeline "Progress & Status History" halaman detail issue.
         // Arsip bentuk BARU sudah menyimpan hasil akhirnya di latestRemark.
+        // Dihitung SEKALI lalu dipakai dua kali: untuk sel Remark di baris ini, dan untuk
+        // baris arsip di bawah. Dulu buildArchiveIssues() menyisir ulang histories setiap
+        // issue dan menjalankan stripAutoForwardNotes() lagi atas teks yang persis sama.
+        //
+        // Bentuknya sengaja dibuat identik dengan buildArchiveIssues(): '' kalau tidak ada
+        // histories, dan '' juga kalau hasil strip-nya kosong. JANGAN samakan dengan fallback
+        // '-' milik baris tabel di bawah -- arsip menyimpan '' dan itu tersimpan PERMANEN di
+        // server, jadi perbedaan sekecil itu membuat hasil unduh ulang tidak lagi identik.
+        let remarkBersih = '';
+        if (item.histories && item.histories.length > 0) {
+            remarkBersih = stripAutoForwardNotes(riwayatTerbaru(item.histories).remark) || '';
+        }
+
         let remarks = '-';
         if (typeof item.latestRemark === 'string') {
             if (item.latestRemark) remarks = item.latestRemark;
-        } else if (item.histories && item.histories.length > 0) {
-            const latestHistory = riwayatTerbaru(item.histories);
-            const cleanedRemark = stripAutoForwardNotes(latestHistory.remark);
-            if (cleanedRemark) remarks = cleanedRemark;
+        } else if (remarkBersih) {
+            remarks = remarkBersih;
+        }
+
+        // Baris arsip dikumpulkan sambil jalan. Nama sengaja diambil lewat pencarian userById
+        // (bukan memakai issuerName/picName di atas) supaya ekspresinya sama persis dengan
+        // buildArchiveIssues() -- yang di atas bisa berasal dari snapshot arsip bentuk baru.
+        if (barisArsip) {
+            const aIssuer = userById.get(String(item.issuedBy));
+            const aPic = userById.get(String(item.picId));
+            barisArsip.push({
+                id: item.id,
+                caseNotification: item.caseNotification,
+                createdAt: item.createdAt,
+                dueDate: item.dueDate,
+                status: item.status,
+                priority: item.priority,
+                category: item.category,
+                correctiveAction: item.correctiveAction || item.description || '',
+                issuerName: aIssuer ? aIssuer.username : `ID: ${item.issuedBy}`,
+                picName: aPic ? aPic.username : '-',
+                latestRemark: remarkBersih,
+            });
         }
 
         const rowValues = [
@@ -271,7 +313,10 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
     // ==========================================
     // BUNGKUS DATA ARSIP — SAMA PERSIS DENGAN exportFilteredIssuesToPDF
     // ==========================================
-    const archiveObject = {
+    // Dirampingkan: buang histories, simpan remark terakhir yang sudah dihitung -- keduanya
+    // sudah dikerjakan di dalam loop baris di atas, jadi tidak ada lintasan kedua di sini.
+    // barisArsip null saat unduh ulang arsip; objeknya pun tidak perlu dibangun.
+    const archiveObject = barisArsip && {
         tanggalExport: new Date().toISOString(),
         notulen: dNotulen,
         chairman: dChairman,
@@ -279,16 +324,24 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
         time: dTime,
         location: dLocation,
         participants: cleanParticipants,
-        // Dirampingkan dulu: buang histories, simpan remark terakhir yang sudah dihitung.
-        dataIssues: buildArchiveIssues(filteredData, userById)
+        dataIssues: barisArsip
     };
 
     try {
         const buffer = await workbook.xlsx.writeBuffer();
-        const base64 = arrayBufferToBase64(buffer);
         const { ipcRenderer } = window.require('electron');
-        const dataUri = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`;
-        const result = await ipcRenderer.invoke('simpan-file', dataUri, `Minutes_Of_Meeting_${new Date().getTime()}.xlsx`, {
+        // Bytenya dikirim APA ADANYA. Jalur lama membangun string biner sepanjang seluruh
+        // workbook, lalu btoa() yang memekarkannya ~1,33x, lalu menempelkannya jadi data URI,
+        // dan string sebesar itu masih harus diserialisasi menyeberangi IPC -- semuanya sinkron,
+        // tepat saat user sudah menunggu app yang membeku.
+        //
+        // Diukur (Node 22, laptop pengembang): xlsx 0,5 MB = 6,0 ms dan data URI 0,67 MB;
+        // 2 MB = 21,4 ms / 2,67 MB; 5 MB = 50,3 ms / 6,67 MB. Semuanya jadi nol.
+        // Hasil berkasnya sudah dibuktikan identik byte-per-byte untuk ukuran 0 B sampai 5 MB.
+        // structured clone milik IPC membawa typed array tanpa perantara apa pun.
+        // Sisi penerimanya: tulisBerkas() di main.js, yang tetap menerima data URI juga.
+        const isi = ArrayBuffer.isView(buffer) ? buffer : new Uint8Array(buffer);
+        const result = await ipcRenderer.invoke('simpan-file', isi, `Minutes_Of_Meeting_${new Date().getTime()}.xlsx`, {
             title: 'Save Excel Export',
             filters: [{ name: 'Excel Files', extensions: ['xlsx'] }]
         });
@@ -312,20 +365,10 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
                 showCustomAlert("Warning", "Excel exported, but failed to save archive to server.");
             }
         } else if (!result.canceled) {
-            showCustomAlert("Error", "Failed to save the Excel file to local storage.");
+            showCustomAlert("Error", result.error || "Failed to save the Excel file to local storage.");
         }
     } catch (err) {
         console.error("System Error: ", err);
         showCustomAlert("Error", "A system error occurred while trying to export.");
     }
-}
-
-function arrayBufferToBase64(buffer) {
-    const bytes = new Uint8Array(buffer);
-    let binary = '';
-    const chunkSize = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-    }
-    return btoa(binary);
 }

@@ -1,6 +1,6 @@
 {
   "name": "pica-system",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Aplikasi PICA Dashboard",
   "main": "main.js",
   "scripts": {
@@ -41,7 +41,15 @@
     "",
     "Pengecualiannya sengaja KONSERVATIF: hanya berkas yang pasti tidak pernah dieksekusi.",
     "Varian dist jspdf yang tidak terpakai (es/node/umd non-min) sengaja TIDAK dikecualikan",
-    "supaya resolusi modul tidak berubah diam-diam."
+    "supaya resolusi modul tidak berubah diam-diam.",
+    "",
+    "JANGAN menambahkan pola direktori tanpa jangkar seperti !**/{test,docs,doc}/** .",
+    "Pola itu pernah ada di sini dan MEMATIKAN export Excel di app hasil build: **/doc/**",
+    "ikut membuang node_modules/exceljs/lib/doc/ yang berisi kode INTI ExcelJS (workbook.js,",
+    "worksheet.js, cell.js, row.js, enums.js) -- itu kode runtime, bukan dokumentasi.",
+    "Akibatnya require(exceljs) melempar MODULE_NOT_FOUND hanya di app hasil build dan",
+    "tidak pernah kelihatan saat npm start. Hematnya pun cuma ~2,1 MB dari node_modules",
+    "542 MB -- penghematan besar datang dari !**/*.map (~43,6 MB) yang tetap dipertahankan."
   ],
   "build": {
     "appId": "com.pica.system",
@@ -56,8 +64,7 @@
       "!dist/**",
       "!.vscode/**",
       "!.github/**",
-      "!**/{.eslintrc,.eslintrc.js,.eslintrc.json,.babelrc,.editorconfig,.gitattributes,.npmignore,.travis.yml}",
-      "!**/{test,tests,__tests__,example,examples,docs,doc}/**"
+      "!**/{.eslintrc,.eslintrc.js,.eslintrc.json,.babelrc,.editorconfig,.gitattributes,.npmignore,.travis.yml}"
     ],
     "win": {
       "target": [

@@ -137,6 +137,29 @@ function createWindow () {
     mainWindow.restore();
   });
 
+  // Menulis isi berkas yang datang dari renderer, apa pun bentuknya.
+  //
+  // Bentuk yang DIUTAMAKAN adalah Uint8Array/ArrayBuffer: structured clone milik IPC membawa
+  // typed array apa adanya. Jalur lama mengubah buffer jadi string biner, lalu btoa() (mekar
+  // ~1,33x), lalu data URI -- ketiganya sinkron di main thread renderer, tepat setelah
+  // pekerjaan berat membangun workbook, dan string sebesar itu masih harus diserialisasi
+  // menyeberangi proses.
+  //
+  // Cabang string TETAP ADA dan bukan sisa warisan: js/issue-import.js masih mengirim data URI
+  // saat mengunduh template import. Menghapusnya akan mematikan tombol itu.
+  function tulisBerkas(filePath, isi) {
+    if (typeof isi === 'string') {
+      fs.writeFileSync(filePath, isi.split(';base64,').pop(), { encoding: 'base64' });
+    } else if (ArrayBuffer.isView(isi)) {
+      // Buffer.from(view.buffer, ...) memakai memori yang sama, tanpa menyalin.
+      fs.writeFileSync(filePath, Buffer.from(isi.buffer, isi.byteOffset, isi.byteLength));
+    } else if (isi instanceof ArrayBuffer) {
+      fs.writeFileSync(filePath, Buffer.from(isi));
+    } else {
+      throw new Error('Bentuk isi berkas tidak dikenali: ' + Object.prototype.toString.call(isi));
+    }
+  }
+
   // Jembatan Simpan PDF
   ipcMain.handle('simpan-pdf', async (event, base64Data, defaultFilename) => {
     isDialogOpen = true; 
@@ -148,8 +171,7 @@ function createWindow () {
       });
 
       if (filePath) {
-        const base64 = base64Data.split(';base64,').pop();
-        fs.writeFileSync(filePath, base64, { encoding: 'base64' });
+        tulisBerkas(filePath, base64Data);
         return { success: true };
       }
       return { success: false, canceled: true };
@@ -172,8 +194,7 @@ function createWindow () {
       });
 
       if (filePath) {
-        const base64 = base64Data.split(';base64,').pop();
-        fs.writeFileSync(filePath, base64, { encoding: 'base64' });
+        tulisBerkas(filePath, base64Data);
         return { success: true };
       }
       return { success: false, canceled: true };
@@ -401,6 +422,13 @@ ipcMain.on('perintah-tutup-paksa', () => {
 // Dipanggil dari renderer (js/auth.js) untuk cek apakah app sedang dalam mode Guest terkunci
 // sebelum mengizinkan Exit App / Logout.
 ipcMain.handle('cek-status-lock', () => isGuestLocked);
+
+// Versi untuk footer. Dulu angkanya ditulis tangan di index.html dan sudah sempat melenceng
+// (footer 2.3.0 sementara package.json 2.3.1), padahal electron-updater memakai versi yang
+// sama untuk memutuskan update -- jadi user membaca angka yang salah persis di tempat mereka
+// mengeceknya. app.getVersion() membaca package.json yang IKUT TERPAKET, jadi ia tidak bisa
+// melenceng lagi.
+ipcMain.handle('app-version', () => app.getVersion());
 
 // =========================================================
 // FITUR PENGINTAI KONEKSI (NETWORK CHECKER)

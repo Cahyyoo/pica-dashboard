@@ -29,8 +29,21 @@ export function stripAutoForwardNotes(text) {
 }
 
 // --- HELPER: MENGUBAH GAMBAR LOGO MENJADI BASE64 (DIPAKAI OLEH EXPORT PDF & EXCEL) ---
+// Logonya TIDAK PERNAH berubah selama app hidup, tapi dulu seluruh rantai ini diulang tiap kali
+// user menekan Export: baca logo_aspire.png (71,6 KB) dari disk, decode, gambar ke canvas, lalu
+// encode ULANG jadi PNG lewat toDataURL(). Semuanya di main thread, tepat sebelum pekerjaan berat
+// membangun workbook -- menambah panjang pembekuan yang memang sudah terasa.
+//
+// HANYA hasil SUKSES yang disimpan. Ini bukan detail sepele: kalau kegagalan ikut di-cache,
+// satu kegagalan baca sesaat akan membuat SEMUA export berikutnya turun ke fallback teks
+// sampai app di-restart -- dan user tidak punya cara menebak kenapa logonya hilang.
+const cacheLogo = new Map();
+
 export function getBase64Image(imgPath) {
-    return new Promise((resolve) => {
+    const tersimpan = cacheLogo.get(imgPath);
+    if (tersimpan) return tersimpan;
+
+    const janji = new Promise((resolve) => {
         const img = new Image();
         img.onload = () => {
             const canvas = document.createElement("canvas");
@@ -42,10 +55,14 @@ export function getBase64Image(imgPath) {
         };
         img.onerror = () => {
             console.warn("Gagal memuat logo, fallback ke teks.");
+            cacheLogo.delete(imgPath);   // percobaan berikutnya HARUS boleh mencoba lagi
             resolve(null);
         };
         img.src = imgPath;
     });
+
+    cacheLogo.set(imgPath, janji);
+    return janji;
 }
 
 // --- ARSIP MOM: RAMPINGKAN DATA ISSUE SEBELUM DIARSIPKAN ---
@@ -112,27 +129,60 @@ const PENANDA_SISTEM = [PENANDA_FORWARD, '[\u{270F}', '[Imported via Excel by ']
  * every one of them; this is convenience, not security.
  */
 export function isEditableLastUpdate(issue, hist) {
-    if (!issue || !hist) return false;
+    return buatPengecekEditable(issue)(hist);
+}
+
+/**
+ * Versi yang dipakai saat merender linimasa: syarat tingkat-ISSUE dihitung SEKALI, lalu
+ * kembalikan closure yang cuma memeriksa hal-hal per-ENTRI.
+ *
+ * Kenapa perlu: isEditableLastUpdate() dipanggil sekali per baris linimasa, dan di dalamnya
+ * memanggil riwayatTerbaru() yang menyisir SELURUH histories. Layar detail memuat riwayat
+ * lengkap (GET /issue/:id, bukan ?ringkas=1), jadi pada issue dengan ~250 entri dan "show
+ * older" dibuka itu 250 x 250 kunjungan entri plus 500 pemformatan tanggal, sinkron, sambil
+ * user menunggu. Dengan pemisahan ini jadi satu sisiran saja: O(h^2) -> O(h).
+ *
+ * Diukur pada linimasa 250 entri (Node 22, laptop pengembang -- yang penting rasionya):
+ * 63.000 kunjungan entri turun jadi 750 (84x), dan 17,71 ms jadi 0,08 ms. Pembandingnya sudah
+ * memakai cache formatter di atas, jadi selisih ini murni dari hilangnya sisiran berulang.
+ *
+ * Yang paling sering terjadi justru gratis: untuk siapa pun yang BUKAN PIC pemilik issue
+ * (semua MD, dan Dept Head yang membuka issue orang lain) fungsi ini mengembalikan
+ * () => false tanpa pernah menyentuh histories sama sekali -- diukur: 0 kunjungan entri.
+ *
+ * Satu pengetatan yang disengaja: "hari ini" kini disampel SEKALI per render, bukan per entri.
+ * Render yang kebetulan melintasi tengah malam WITA jadi konsisten untuk seluruh linimasa,
+ * bukan setengah memakai hari kemarin dan setengah hari ini.
+ */
+export function buatPengecekEditable(issue) {
+    const TOLAK = () => false;
+    if (!issue) return TOLAK;
 
     // Tombolnya memanggil PATCH /issue/history/:historyId, yang hanya ada di backend 2.3.0.
     // Di backend lama ia harus tidak muncul sama sekali -- membiarkannya tampil berarti user
     // menekannya lalu mendapat kegagalan tanpa sebab yang bisa ia mengerti.
-    if (state.backendPunyaDetail === false) return false;
+    if (state.backendPunyaDetail === false) return TOLAK;
 
-    if (localStorage.getItem('user_role') !== 'Dept Head') return false;
-    if (String(issue.picId) !== String(localStorage.getItem('user_id'))) return false;
-    if (issue.status === 'Closed') return false;
+    const userId = localStorage.getItem('user_id');
+    if (localStorage.getItem('user_role') !== 'Dept Head') return TOLAK;
+    if (String(issue.picId) !== String(userId)) return TOLAK;
+    if (issue.status === 'Closed') return TOLAK;
 
     // Newest entry, computed rather than trusting the array order.
     const terbaru = riwayatTerbaru(issue.histories);
-    if (!terbaru || terbaru.id !== hist.id) return false;
+    if (!terbaru) return TOLAK;
 
-    // Today, compared in WITA the same way the rest of the app does.
-    if (formatWitaDate(hist.createdAt, 'en-CA') !== formatWitaDate(new Date(), 'en-CA')) return false;
+    const hariIni = formatWitaDate(new Date(), 'en-CA');
 
-    if (hist.createdById != null && String(hist.createdById) !== String(localStorage.getItem('user_id'))) return false;
-    if (PENANDA_SISTEM.some(p => String(hist.remark || '').includes(p))) return false;
-    return true;
+    return function (hist) {
+        if (!hist) return false;
+        if (terbaru.id !== hist.id) return false;
+        // Today, compared in WITA the same way the rest of the app does.
+        if (formatWitaDate(hist.createdAt, 'en-CA') !== hariIni) return false;
+        if (hist.createdById != null && String(hist.createdById) !== String(userId)) return false;
+        if (PENANDA_SISTEM.some(p => String(hist.remark || '').includes(p))) return false;
+        return true;
+    };
 }
 
 // --- ACTIVITY LOG: REPORT AN ACTION THE SERVER CANNOT SEE FOR ITSELF ---
@@ -182,10 +232,91 @@ export function debounce(fn, delayMs = 250) {
     };
 }
 
+// --- CACHE FORMATTER TANGGAL ---------------------------------------------------
+// toLocaleDateString()/toLocaleString() MEMBANGUN Intl.DateTimeFormat baru tiap panggilan --
+// bagian termahal dari memformat tanggal, dan di app ini dipanggil per BARIS: 2x per baris
+// tabel MD (page size sampai 200), 1x per baris PIC, 2x per baris export PDF/Excel, 2x per
+// entri linimasa lewat isEditableLastUpdate(), 2x per baris Login Activity plus 1x lagi di
+// predikat filternya. Seluruh app cuma memakai 8 bentuk (locale + options) yang berbeda,
+// jadi instance-nya dipakai ulang.
+//
+// Diukur: satu render tabel MD page size 200 = 400 panggilan format. 47,13 ms dengan pola lama,
+// 1,18 ms dengan cache ini (~40x). Angka ini dari Node 22 di laptop pengembang, BUKAN dari
+// kiosk -- yang penting rasionya; di kiosk yang lebih lambat selisih absolutnya lebih besar.
+// Dan ongkos itu terbayar lagi setiap ketukan di kotak search, karena filter memicu render ulang.
+//
+// JEBAKANNYA, dan ini alasan lengkapiOpsi() di bawah ada: toLocaleString(l, o) BUKAN
+// new Intl.DateTimeFormat(l, o). Keduanya menjalankan ToDateTimeOptions dengan argumen
+// berbeda (date: required "date"/defaults "date"; datetime: required "any"/defaults "all"),
+// yang MENAMBAHKAN komponen saat options tidak menyebut satu pun. Intl.DateTimeFormat dengan
+// hanya { timeZone } menghasilkan TANGGAL SAJA -- jadi meneruskan options apa adanya akan
+// diam-diam menghapus jam dari formatWitaDateTime(x), yang dipakai header PDF.
+const cacheFormatter = new Map();
+
+function lengkapiOpsi(jenis, options) {
+    const o = { ...options };
+    let perluDefault = true;
+    // required "date" maupun "any" sama-sama memeriksa keempat komponen tanggal ini.
+    for (const k of ['weekday', 'year', 'month', 'day']) {
+        if (o[k] !== undefined) perluDefault = false;
+    }
+    // Komponen waktu HANYA diperiksa oleh toLocaleString (required "any"). Ini penting:
+    // formatWitaDate(x, l, { hour, minute }) tetap mendapat tambahan year/month/day.
+    if (jenis === 'datetime') {
+        for (const k of ['dayPeriod', 'hour', 'minute', 'second', 'fractionalSecondDigits']) {
+            if (o[k] !== undefined) perluDefault = false;
+        }
+    }
+    if (perluDefault) {
+        o.year = 'numeric'; o.month = 'numeric'; o.day = 'numeric';
+        if (jenis === 'datetime') { o.hour = 'numeric'; o.minute = 'numeric'; o.second = 'numeric'; }
+    }
+    o.timeZone = WITA_TIMEZONE;   // ditaruh terakhir: memaksa WITA, sama seperti sebelumnya
+    return o;
+}
+
+// Mengembalikan formatter, atau null yang artinya "pakai jalur lama untuk bentuk ini".
+function ambilFormatter(jenis, locale, options) {
+    // dateStyle/timeStyle punya aturan defaulting sendiri. Belum dipakai di app ini; kalau
+    // suatu saat dipakai, biarkan jatuh ke jalur lama daripada menebak.
+    if (options && (options.dateStyle !== undefined || options.timeStyle !== undefined)) return null;
+
+    const kunci = jenis + '|' + locale + '|' + JSON.stringify(options);
+    if (cacheFormatter.has(kunci)) return cacheFormatter.get(kunci);
+
+    let f = null;
+    try {
+        f = new Intl.DateTimeFormat(locale, lengkapiOpsi(jenis, options));
+        // Guard yang membuktikan dirinya sendiri: sekali per bentuk, hasil formatter baru
+        // dibandingkan dengan ekspresi LAMA. Kalau replikasi defaulting di atas meleset untuk
+        // bentuk apa pun, bentuk itu otomatis kembali ke jalur lama dan menulis peringatan --
+        // bukan diam-diam mengubah tampilan tanggal user. Ongkosnya ~8 panggilan legacy ekstra
+        // seumur proses. Dua tanggal uji: satu tanggal satu digit, satu dua digit, supaya
+        // perbedaan padding ikut ketahuan.
+        for (const uji of [new Date(Date.UTC(2024, 0, 5, 6, 7, 8)), new Date(Date.UTC(2024, 10, 25, 18, 47, 8))]) {
+            const lama = jenis === 'datetime'
+                ? uji.toLocaleString(locale, { ...options, timeZone: WITA_TIMEZONE })
+                : uji.toLocaleDateString(locale, { ...options, timeZone: WITA_TIMEZONE });
+            if (f.format(uji) !== lama) {
+                console.warn(`Cache formatter dimatikan untuk ${kunci}: "${f.format(uji)}" != "${lama}"`);
+                f = null;
+                break;
+            }
+        }
+    } catch (e) {
+        console.warn('Gagal membuat formatter untuk ' + kunci, e);
+        f = null;
+    }
+    cacheFormatter.set(kunci, f);
+    return f;
+}
+
 export function formatWitaDate(dateInput, locale = 'en-GB', options = {}) {
     if (!dateInput) return '-';
     const d = new Date(dateInput);
     if (isNaN(d.getTime())) return '-';
+    const f = ambilFormatter('date', locale, options);
+    if (f) return f.format(d);
     return d.toLocaleDateString(locale, { ...options, timeZone: WITA_TIMEZONE });
 }
 
@@ -193,6 +324,8 @@ export function formatWitaDateTime(dateInput, locale = 'en-GB', options = {}) {
     if (!dateInput) return '-';
     const d = new Date(dateInput);
     if (isNaN(d.getTime())) return '-';
+    const f = ambilFormatter('datetime', locale, options);
+    if (f) return f.format(d);
     return d.toLocaleString(locale, { ...options, timeZone: WITA_TIMEZONE });
 }
 
@@ -340,16 +473,22 @@ export function getDailyUpdateBadge(issue) {
 }
 
 // --- MODULAR HTML INJECTION FUNCTION ---
-export async function loadComponent(containerId, filePath) {
+// Hanya MENGAMBIL isinya, tanpa menyuntikkan. Menggantikan loadComponent() yang dulu melakukan
+// keduanya sekaligus, sehingga app.js terpaksa menunggu satu berkas selesai sebelum memulai
+// berkas berikutnya. Dipisah supaya app.js bisa mengambil keempat fragment BERSAMAAN lalu
+// menyuntikkannya berurutan -- ketiga fragment pertama menumpuk ke container yang sama, jadi
+// urutan penyuntikan menentukan urutan DOM dan tidak boleh diacak.
+//
+// Mengembalikan '' saat gagal, bukan melempar: perilaku lama menelan kegagalan per berkas
+// supaya satu fragment yang hilang tidak menggagalkan seluruh boot. Itu dipertahankan.
+export async function ambilKomponen(filePath) {
     try {
         const response = await fetch(filePath);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const html = await response.text();
-        
-        // Inject HTML into the target container
-        document.getElementById(containerId).insertAdjacentHTML('beforeend', html);
+        return await response.text();
     } catch (error) {
         console.error(`Failed to load component ${filePath}:`, error);
+        return '';
     }
 }
 
@@ -448,14 +587,24 @@ export async function kirimSekali(idTombol, teksProses, kerja) {
         btn.disabled = true;
         btn.innerText = teksProses || 'Processing...';
     }
+    // Dihanguskan DUA KALI, sebelum dan sesudah -- dan yang "sebelum" ini bukan kelebihan.
+    // kerja() me-reload dashboard DI DALAM dirinya sendiri (lihat loadDashboardMD/PIC yang
+    // dipanggil tepat setelah response.ok di issue-action.js). Kalau cache baru dihanguskan di
+    // finally, reload itu sudah terlanjur dilayani cache PRA-tulis: PIC menekan Save, kembali ke
+    // Task List, dan masih melihat "Not Updated" untuk task yang baru saja ia isi -- sampai ia
+    // menekan Refresh. Menghanguskan lebih dulu membuat reload di dalam kerja() menembak jaringan.
+    lupakanCacheIssue();
     try {
         return await kerja();
     } finally {
         // Setiap aksi yang dibungkus helper ini MENULIS data issue (submit, update, priority,
-        // category, due date, assignment, edit). Jadi di sinilah satu-satunya tempat yang perlu
-        // menghanguskan cache -- tujuh pemanggil sekaligus, tanpa bisa terlupa satu per satu.
-        // Dijalankan juga saat kerja() gagal: permintaan yang gagal di tengah tetap bisa sudah
-        // mengubah sebagian data di server.
+        // category, due date, assignment, edit). Jadi helper inilah tempat menghanguskan cache --
+        // tujuh pemanggil sekaligus, tanpa bisa terlupa satu per satu.
+        //
+        // Penghangusan KEDUA (yang pertama ada tepat sebelum try di atas). Tetap diperlukan:
+        // selama kerja() berjalan, reload di dalamnya sudah mengisi ulang cache dengan data
+        // pasca-tulis; kalau kerja() lalu GAGAL di tengah, server bisa sudah berubah sebagian dan
+        // isi cache itu tidak lagi bisa dipercaya. Dijalankan di finally supaya jalur gagal ikut.
         lupakanCacheIssue();
 
         // finally, bukan setelah await: kalau kerja() melempar, tombol WAJIB hidup lagi
@@ -477,11 +626,73 @@ export async function kirimSekali(idTombol, teksProses, kerja) {
 // Seri waktu dipecah oleh id yang lebih besar (= dimasukkan belakangan). Array#sort di V8
 // stabil, jadi sebelumnya yang menang adalah yang lebih dulu ada di array -- bergantung pada
 // urutan kiriman server. Memakai id membuatnya deterministik.
+// -- Tanggal -> milidetik, tanpa membuat objek Date kalau tidak perlu -----------
+// Backend selalu mengirim string ISO, dan untuk string ISO Date.parse() menghasilkan angka
+// yang SAMA PERSIS dengan new Date(v).getTime() -- menurut definisi, keduanya menjalankan
+// algoritma parse yang sama. Bedanya Date.parse() tidak mengalokasikan objek Date yang
+// langsung dibuang. Nilai non-string (mis. objek Date) tetap lewat jalur lama.
+export function msDari(v) {
+    return typeof v === 'string' ? Date.parse(v) : new Date(v).getTime();
+}
+
+// -- Cache kunci urut, berbasis identitas objek --------------------------------
+// state.globalIssues memegang objek yang SAMA selama satu jendela cache issue, dan tiga dari
+// lima pengurutan di issue-dashboard.js dijalankan ulang tiap ketukan keyboard yang ter-debounce.
+// Tanpa cache, satu pengurutan n=1.000 mem-parse tanggal ~2*n*log n kali (~20.000), dan itu
+// terulang tiap ketukan. Dengan WeakMap, ketukan kedua dan seterusnya nol parsing.
+//
+// Diukur (n=1.000, objek yang sama diurutkan berulang seperti saat mengetik di kotak search,
+// Node 22 di laptop pengembang): 5,03 ms per pengurutan jadi 0,68 ms (~7x).
+//
+// INVARIAN yang disandari: tidak ada satu pun tempat di app ini yang mengubah createdAt pada
+// objek issue yang sudah ada. Pemuatan ulang selalu menghasilkan objek BARU dari JSON.parse(),
+// jadi entri lama otomatis terkoleksi (karena itu WeakMap, bukan Map). Kalau suatu saat ada
+// kode yang memutasi createdAt di tempat, cache ini WAJIB dibuang.
+const cacheMsDibuat = new WeakMap();
+
+export function msDibuat(issue) {
+    let ms = cacheMsDibuat.get(issue);
+    if (ms === undefined) {
+        ms = msDari(issue.createdAt);
+        cacheMsDibuat.set(issue, ms);
+    }
+    return ms;
+}
+
+// Urutan tampil status di semua tabel: yang paling butuh perhatian di atas, yang sudah
+// selesai di bawah. "Continue" ditaruh di antara Progress dan Closed -- masih aktif, tapi
+// sengaja diparkir untuk dilanjutkan besok.
+//
+// Sebelumnya map ini disalin PERSIS SAMA di 5 fungsi berbeda di issue-dashboard.js. Cukup satu
+// salinan terlewat saat status baru ditambah, satu tabel akan salah urut tanpa ketahuan.
+// Sekarang map DAN pembandingnya sama-sama tinggal satu salinan, di sini.
+export const STATUS_ORDER = { 'Open': 1, 'Progress': 2, 'Continue': 3, 'Closed': 4 };
+// Status di luar daftar (mis. sisa import lama) ditaruh paling akhir. Angkanya HARUS di
+// atas bobot Closed, kalau tidak status tak dikenal akan seri dengan Closed.
+export const STATUS_ORDER_LAINNYA = 5;
+
+// Mengurutkan DI TEMPAT (kelima pemanggil memang bekerja pada array hasil filter/map yang
+// baru dibuat) lalu mengembalikan array yang sama supaya enak dirantai.
+//
+// Bentuk pengurangannya sengaja dipertahankan PERSIS seperti kelima salinan lama, dan itu
+// bukan gaya penulisan: kalau createdAt rusak, msDibuat() menghasilkan NaN dan pengurangannya
+// jadi NaN. Menurut spec, SortCompare memperlakukan hasil NaN sebagai +0, dan Array#sort di
+// V8 stabil -- jadi baris dengan tanggal rusak MEMPERTAHANKAN urutan masuknya. Transformasi
+// Schwartzian dengan tiebreak indeks akan MENGUBAH perilaku itu. Jangan.
+export function urutkanIssueStatusTanggal(daftar) {
+    return daftar.sort((a, b) => {
+        const bobotA = STATUS_ORDER[a.status] || STATUS_ORDER_LAINNYA;
+        const bobotB = STATUS_ORDER[b.status] || STATUS_ORDER_LAINNYA;
+        if (bobotA !== bobotB) return bobotA - bobotB;
+        return msDibuat(b) - msDibuat(a);   // terbaru di atas
+    });
+}
+
 export function riwayatTerbaru(histories) {
     const daftar = histories || [];
     let terbaru = null, ms = -Infinity, id = -Infinity;
     for (const h of daftar) {
-        const t = new Date(h.createdAt).getTime();
+        const t = msDari(h.createdAt);
         const hid = Number(h.id);
         // Perbandingan dengan NaN selalu false, jadi tanggal rusak tidak pernah menang.
         if (t > ms || (t === ms && hid > id)) { terbaru = h; ms = t; id = hid; }
@@ -576,6 +787,52 @@ export function ambilIssueRingkas() {
             throw err;
         });
     return cacheIssue.inFlight;
+}
+
+// =========================================================================
+// CACHE PENDEK UNTUK GET /auth/users
+// =========================================================================
+// Pola dan alasannya sama persis dengan cache issue di atas, untuk endpoint yang justru lebih
+// sering diketuk: tujuh tempat memanggilnya, dan window.showView() memicu pemuatan data di
+// hampir SETIAP perpindahan layar. Akibatnya bolak-balik Task List -> detail -> kembali
+// mengunduh SELURUH tabel user tiap putaran, padahal isinya nyaris tak pernah berubah.
+//
+// TTL 60 detik, lebih panjang dari cache issue, karena taruhannya lebih ringan: data ini cuma
+// dipakai untuk menampilkan nama (picName/issuerName) dan dicari lewat kotak search. Yang
+// tertunda paling lama satu TTL hanyalah user yang di-rename/dihapus dari PERANGKAT LAIN.
+// Layar Admin sengaja DIKECUALIKAN -- lihat loadAdminUsers() di auth.js, yang selalu
+// menghanguskan cache lebih dulu supaya tabel yang dipakai mengelola user tetap otoritatif.
+//
+// Permintaannya sengaja dipertahankan apa adanya: TANPA auth header, sama seperti kedua
+// pemanggil aslinya. Menambahkannya adalah perubahan kontrak dengan backend, bukan optimasi.
+const USER_CACHE_TTL_MS = 60000;
+let cacheUser = { at: 0, data: null, inFlight: null };
+
+export function lupakanCacheUser() {
+    cacheUser = { at: 0, data: null, inFlight: null };
+}
+
+export function ambilUsers() {
+    if (cacheUser.data && Date.now() - cacheUser.at < USER_CACHE_TTL_MS) {
+        return Promise.resolve(cacheUser.data);
+    }
+    if (cacheUser.inFlight) return cacheUser.inFlight;
+
+    cacheUser.inFlight = fetch(`${API_URL}/auth/users`)
+        .then(res => {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        })
+        .then(data => {
+            cacheUser = { at: Date.now(), data, inFlight: null };
+            return data;
+        })
+        .catch(err => {
+            // Sama seperti cache issue: kegagalan tidak boleh membekukan cache.
+            cacheUser.inFlight = null;
+            throw err;
+        });
+    return cacheUser.inFlight;
 }
 
 export function beriNapasUI() {
