@@ -35,6 +35,16 @@ function beritahuModeLama() {
     showCustomAlert("Compatibility Mode",
         "Running against an older backend \u2014 'Edit this update' is unavailable.");
 }
+
+// Satu tempat untuk keadaan mati/hidup tombol Next/Prev, supaya disabled, opacity, dan cursor
+// tidak pernah lagi saling bertentangan.
+function setTombolNavigasi(tombol, mati) {
+    if (!tombol) return;
+    tombol.disabled = mati;
+    tombol.style.opacity = mati ? '0.4' : '1';
+    tombol.style.cursor = mati ? 'not-allowed' : 'pointer';
+}
+
 export async function openDetailView(id) {
     state.currentDetailId = id;
     timelinePenuh = false;
@@ -84,22 +94,28 @@ export async function openDetailView(id) {
     
     const currentIndex = state.currentIssueIds.indexOf(id);
     const totalIssues = state.currentIssueIds.length;
-    
-    if (totalIssues > 0 && currentIndex !== -1) {
-        document.getElementById('detail-page-info').innerText = `${currentIndex + 1} / ${totalIssues}`;
-        
-        // Matikan tombol Kiri jika di halaman pertama, Kanan jika di akhir
-        const btnPrev = document.getElementById('btn-prev-issue');
-        const btnNext = document.getElementById('btn-next-issue');
-        
-        btnPrev.disabled = (currentIndex === 0);
-        btnPrev.style.opacity = (currentIndex === 0) ? '0.4' : '1';
-        btnPrev.style.cursor = (currentIndex === 0) ? 'not-allowed' : 'pointer';
 
-        btnNext.disabled = (currentIndex === totalIssues - 1);
-        btnNext.style.opacity = (currentIndex === totalIssues - 1) ? '0.4' : '1';
-        btnNext.style.cursor = (currentIndex === totalIssues - 1) ? 'not-allowed' : 'pointer';
-    }
+    // Indikator dan tombol SELALU digambar ulang. Dulu blok ini dilewati saat currentIndex === -1,
+    // sehingga issue yang keluar dari daftar mewarisi "1 / 3" dan tombol biru milik issue sebelumnya
+    // -- terlihat bisa diklik, padahal navigateIssue() diam saja.
+    if (currentIndex !== -1) state.detailNavIndex = currentIndex;
+
+    // Kalau id-nya tidak ada di daftar, posisi terakhir yang diketahui jadi jangkarnya: item yang
+    // dulu berada di detailNavIndex + 1 kini bergeser ke detailNavIndex.
+    const jangkar = currentIndex !== -1
+        ? currentIndex
+        : Math.min(Math.max(state.detailNavIndex, 0), totalIssues);
+
+    const prevMati = totalIssues === 0 || (currentIndex !== -1 ? currentIndex === 0 : jangkar <= 0);
+    const nextMati = totalIssues === 0 || (currentIndex !== -1 ? currentIndex === totalIssues - 1 : jangkar >= totalIssues);
+
+    document.getElementById('detail-page-info').innerText = currentIndex !== -1
+        ? `${currentIndex + 1} / ${totalIssues}`
+        : `– / ${totalIssues}`;
+
+    // Matikan tombol Kiri jika di halaman pertama, Kanan jika di akhir
+    setTombolNavigasi(document.getElementById('btn-prev-issue'), prevMati);
+    setTombolNavigasi(document.getElementById('btn-next-issue'), nextMati);
     
     document.getElementById('detail-title').innerText = issue.caseNotification;
     document.getElementById('detail-created').innerText = formatWitaDate(issue.createdAt);
@@ -368,17 +384,28 @@ export function updateFileNameDisplay(input) {
 // FITUR NAVIGASI NEXT / PREV ISSUE
 // ==========================================
 export async function navigateIssue(direction) {
-    const currentIndex = state.currentIssueIds.indexOf(state.currentDetailId);
-    if (currentIndex === -1) return; // Mencegah error jika ID tidak ditemukan
+    const totalIssues = state.currentIssueIds.length;
+    if (totalIssues === 0) return;
 
-    const nextIndex = currentIndex + direction;
-    
+    const currentIndex = state.currentIssueIds.indexOf(state.currentDetailId);
+
+    let nextIndex;
+    if (currentIndex !== -1) {
+        nextIndex = currentIndex + direction;
+    } else {
+        // Issue yang sedang dibuka sudah tidak ada di daftar. Sebelumnya fungsi ini langsung
+        // return di sini, jadi tombolnya benar-benar tanpa aksi. Dengan jangkar, penghuni baru
+        // posisi itu menjadi "berikutnya", dan satu di atasnya menjadi "sebelumnya".
+        const jangkar = Math.min(Math.max(state.detailNavIndex, 0), totalIssues);
+        nextIndex = direction > 0 ? jangkar : jangkar - 1;
+    }
+
     // Pastikan index baru tidak keluar dari batas array
-    if (nextIndex >= 0 && nextIndex < state.currentIssueIds.length) {
+    if (nextIndex >= 0 && nextIndex < totalIssues) {
         const nextId = state.currentIssueIds[nextIndex];
-        
+
         // Buka detail yang baru (ini akan otomatis me-render ulang seluruh halaman detail)
-        await openDetailView(nextId); 
+        await openDetailView(nextId);
     }
 }
 

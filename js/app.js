@@ -6,6 +6,7 @@
 import { API_URL } from './config.js';
 import { showView, showCustomAlert, closeCustomAlert, navigateToRole, ambilKomponen, showCustomConfirm, closeCustomConfirm } from './utils.js';
 import { handleLogin, handleLogout, handleExitApp, loadAdminUsers, submitNewUser, deleteUser, openEditUserModal, closeEditUserModal, submitEditUser, loadLoginLogs, filterLoginLogs, filterLoginLogsDebounced, refreshLoginLogs, changeLoginLogsDate, changeLoginLogsPage, changeLoginLogsPageSize, trackAppOpen, isGuestLockedNow } from './auth.js';
+import { tokenSudahKedaluwarsa, paksaLoginUlang, jadwalkanPaksaLogin } from './session.js';
 import {
     loadDepartments, submitIssue, loadDashboardMD, loadDashboardPIC,
     openDetailView, backFromDetail, openUpdateFromDetail, closeUpdateModal, requestCloseUpdateModal, openEditUpdateModal,
@@ -196,7 +197,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const savedToken = localStorage.getItem('access_token');
     const savedRole = localStorage.getItem('user_role');
-    
+
+    // Token sudah lewat masa berlakunya (1 hari) -> jangan auto-resume, paksa login ulang.
+    // Kalau backend tak terjangkau, paksaLoginUlang() menunda dan app lanjut seperti biasa.
+    if (savedToken && savedRole && tokenSudahKedaluwarsa() && await paksaLoginUlang()) return;
+
     // TAHAP C: ROUTING LAYAR AWAL
     if (savedToken && savedRole) {
         
@@ -213,11 +218,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         // App dibuka lewat sesi tersimpan (tidak perlu login ulang) — tetap dicatat sebagai
         // "app dibuka" supaya laporan Login Activity mencerminkan pemakaian app yang sebenarnya.
         trackAppOpen('auto-resume');
+        jadwalkanPaksaLogin();
 
         navigateToRole(savedRole);
         perbaruiBadgeMenuPic();
     } else {
         showView('view-login');
+
+        // Datang dari paksaLoginUlang() -- jelaskan kenapa user tiba-tiba di layar login.
+        if (localStorage.getItem('sesi_kedaluwarsa')) {
+            localStorage.removeItem('sesi_kedaluwarsa');
+            showCustomAlert("Session Expired", "Your session has expired. Please sign in again.");
+        }
     }
 });
 
@@ -226,8 +238,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 // =========================================================
 function startBackgroundMonitor() {
     setInterval(async () => {
+        // Untuk SEMUA role: token habis di tengah sesi -> paksa login ulang. Kalau backend sedang
+        // tak terjangkau, paksaLoginUlang() menunda dan menit berikutnya dicoba lagi.
+        if (localStorage.getItem('access_token') && tokenSudahKedaluwarsa()) {
+            await paksaLoginUlang();
+            return;
+        }
+
         const role = localStorage.getItem('user_role');
-        if (role !== 'Dept Head') return; 
+        if (role !== 'Dept Head') return;
 
         // CATATAN ZONA WAKTU (sengaja dibiarkan, jangan "diperbaiki" sambil lalu):
         // getHours() dan toDateString() di sini memakai waktu OS, sementara seluruh app lain

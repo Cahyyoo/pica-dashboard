@@ -7,6 +7,11 @@ export const state = {
     // pada SETIAP render tabel, dan empat tempat lain masih memindai linear dengan .find().
     userById: new Map(),
     currentDetailId: null,
+    // Posisi currentDetailId di dalam currentIssueIds saat terakhir kali ia masih ada di sana.
+    // Dipakai sebagai jangkar kalau issue yang sedang dibuka KELUAR dari daftar -- mis. di
+    // dashboard MD statusnya diubah jadi Closed padahal filternya Open. Tanpa jangkar,
+    // navigateIssue() kehilangan titik berangkat dan Next/Prev mati tanpa penjelasan.
+    detailNavIndex: 0,
     // Daftar tugas yang sedang tampil di Task List PIC. Disimpan supaya melipat/membuka
     // sebuah blok bisa merender ulang tanpa mengambil data dari server lagi.
     // Kategori yang sedang dibuka di Task List PIC (Daily/Weekly/Midyear/Annual).

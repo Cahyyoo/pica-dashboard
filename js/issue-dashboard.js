@@ -525,7 +525,8 @@ function gambarBlokPic() {
         return;
     }
 
-    // Urutan Next/Prev di layar detail HARUS mengikuti urutan yang benar-benar terlihat.
+    // Urutan Next/Prev di layar detail mengikuti urutan blok di layar ini, dan mencakup
+    // SELURUH tugas PIC -- termasuk yang bloknya sedang terlipat.
     const urutTampil = [];
 
     let html = '';
@@ -546,7 +547,14 @@ function gambarBlokPic() {
             </td>
         </tr>`;
 
-        if (!terbuka) return;
+        // Blok terlipat tetap masuk daftar Next/Prev. Begitu sebuah status di-update, issue-nya
+        // pindah ke blok "Updated today" yang default-nya tertutup; kalau id-nya ikut hilang dari
+        // daftar, navigateIssue() tidak menemukan issue yang sedang dibuka dan tombolnya mati total
+        // tanpa penjelasan apa pun -- persis bug yang dilaporkan PIC.
+        if (!terbuka) {
+            daftar.forEach(item => urutTampil.push(item.id));
+            return;
+        }
 
         const kelasBaris = kunci === 'belum' ? ' class="baris-belum"' : '';
         const badgeUpdate = BADGE_BLOK[kunci];

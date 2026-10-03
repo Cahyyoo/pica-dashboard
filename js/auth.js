@@ -2,6 +2,7 @@ import { API_URL, getAuthHeaders } from './config.js';
 import { showCustomAlert, navigateToRole, showCustomConfirm, formatWitaDate, formatWitaDateTime, debounce, escapeHtml, ambilUsers, lupakanCacheUser } from './utils.js';
 import { checkDailyUpdates, ringkasanTertunda, fetchUsersForMapping, perbaruiBadgeMenuPic, simpanUsersKeState } from './issues.js';
 import { state } from './issue-state.js';
+import { jadwalkanPaksaLogin } from './session.js';
 // -------------------------------------------
 
 // Catat "app dibuka" — dipanggil setiap kali user benar-benar mulai memakai aplikasi,
@@ -70,6 +71,7 @@ export async function handleLogin() {
             // -------------------------------
 
             trackAppOpen('login');
+            jadwalkanPaksaLogin();
 
             document.getElementById('username').value = '';
             document.getElementById('password').value = '';

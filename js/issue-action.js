@@ -4,6 +4,7 @@ import { showCustomAlert, showView, showCustomConfirm, stripAutoForwardNotes, es
 import { state } from './issue-state.js';
 import { loadDashboardMD, loadDashboardPIC } from './issue-dashboard.js';
 import { openDetailView, backFromDetail } from './issue-detail.js';
+import { PESAN_SESI_DITOLAK, paksaLoginUlang } from './session.js';
 
 // Dibungkus kirimSekali(): tombolnya dikunci selama permintaan berjalan, supaya
 // ketukan kedua tidak membuat baris/perubahan kembar.
@@ -839,6 +840,9 @@ async function submitUpdateInti() {
                 const err = await response.json();
                 if (err && err.message) pesan = Array.isArray(err.message) ? err.message.join(', ') : String(err.message);
             } catch (e) { /* biarkan pesan umum */ }
+            // Server menolak token padahal cek lokal menganggapnya masih berlaku (jam kiosk
+            // meleset dari jam server) -> paksa login ulang, bukan alert "Failed" yang buntu.
+            if (pesan.includes(PESAN_SESI_DITOLAK) && await paksaLoginUlang()) return;
             showCustomAlert("Failed", pesan);
         }
     } catch (error) { 
