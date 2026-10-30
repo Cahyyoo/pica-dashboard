@@ -68,12 +68,12 @@
         
         <div class="modal-content" style="max-width: 750px; width: 95%; background: #ffffff; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; max-height: 85vh; overflow: hidden;">
             
-            <div style="padding: 20px 24px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #f9fafb;">
+            <div style="padding: 20px 24px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; gap: 16px; background: #f9fafb;">
                 <div>
                     <h2 style="margin: 0; color: #111827; font-size: 1.25rem; font-weight: 600;">Minutes of Meeting Form</h2>
                     <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 0.85rem;">Please complete the meeting details before exporting the report (used for both PDF and Excel).</p>
                 </div>
-                <button onclick="closeMOMModal()" style="background: none; border: none; font-size: 1.5rem; color: #9ca3af; cursor: pointer; transition: color 0.2s;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#9ca3af'">&times;</button>
+                <button class="btn-tutup-modal" onclick="closeMOMModal()" title="Close">&times;</button>
             </div>
 
             <input type="hidden" id="mom-export-format" value="pdf">

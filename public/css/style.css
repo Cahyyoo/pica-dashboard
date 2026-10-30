@@ -297,6 +297,15 @@ button:hover { background: var(--blue-light); color: #111827; } /* Saat di-hover
     box-shadow: 0 8px 20px rgba(0,0,0,0.2);
     max-height: 90vh; overflow-y: auto; box-sizing: border-box;
 }
+/* Tombol × di pojok header modal (MOM Export & MOM Detail). Wajib menimpa `button { width:100%;
+   padding }` global -- tanpa itu tombol melebar mengisi sisa header dan × tampil di tengah. */
+.btn-tutup-modal {
+    width: 32px; height: 32px; flex: 0 0 auto; margin: 0; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%; background: #fee2e2; color: #ef4444;
+    font-size: 1.2rem; line-height: 1;
+}
+.btn-tutup-modal:hover { background: #fca5a5; color: #ef4444; }
 .modal-box h3 { margin-top: 0; color: #111827; font-size: 18px;}
 .modal-box p { color: var(--teks-lembut); margin-bottom: 24px; font-size: 14px; line-height: 1.5;}
 
