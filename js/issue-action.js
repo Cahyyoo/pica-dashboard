@@ -550,7 +550,9 @@ function applyUpdateModalMode(mode) {
     if (judul) judul.innerText = edit ? 'Edit Last Update' : 'Update PICA Progress';
     const sub = document.querySelector('#modal-update .modal-head .subtitle');
     if (sub) sub.innerText = edit ? 'Correct the progress note you saved today.' : 'Update status and progress notes.';
-    const btnSave = document.querySelector('#modal-update .modal-foot button');
+    // Lewat id, bukan "tombol pertama di footer": sejak Cancel dipindah ke kiri, tombol
+    // pertama adalah Cancel dan labelnya ikut tertimpa "Save Changes".
+    const btnSave = document.getElementById('btn-submit-update');
     if (btnSave) btnSave.innerText = edit ? 'Save Edit' : 'Save Changes';
 
     // Forwarding is an event, not a correction. The field is hidden AND cleared, so a value
