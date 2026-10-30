@@ -306,6 +306,18 @@ button:hover { background: var(--blue-light); color: #111827; } /* Saat di-hover
     font-size: 1.2rem; line-height: 1;
 }
 .btn-tutup-modal:hover { background: #fca5a5; color: #ef4444; }
+/* BARIS TOMBOL MODAL: Cancel di KIRI, aksi di KANAN, semua tombol SAMA lebar & tinggi.
+   margin:0 menimpa margin-top:8px milik .btn-secondary -- dulu penyebab Cancel turun 8px dari
+   tombol di sebelahnya -- dan border 1px transparan pada tombol non-secondary menyamakan
+   tingginya dengan .btn-secondary yang ber-border 1px. */
+.modal-aksi { display: flex; gap: 10px; align-items: center; }
+.modal-aksi > button,
+.modal-foot > button {
+    flex: 1 1 0; margin: 0; min-height: 44px; padding: 10px 16px;
+    border-width: 1px; border-style: solid; box-sizing: border-box;
+}
+.modal-aksi > button:not(.btn-secondary),
+.modal-foot > button:not(.btn-secondary) { border-color: transparent; }
 .modal-box h3 { margin-top: 0; color: #111827; font-size: 18px;}
 .modal-box p { color: var(--teks-lembut); margin-bottom: 24px; font-size: 14px; line-height: 1.5;}
 
@@ -553,7 +565,7 @@ button:hover { background: var(--blue-light); color: #111827; } /* Saat di-hover
 .modal-box-update .file-upload-wrapper { min-height: 96px; }
 
 .modal-foot { display: flex; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--garis); }
-.modal-foot button { flex: 1 1 0; min-height: 44px; }
+/* Ukuran tombolnya diatur bersama .modal-aksi (blok "BARIS TOMBOL MODAL"). */
 
 /* --- Remark panel --- */
 /* The main column is not a .form-group, so its label needs the same treatment. */

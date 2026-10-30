@@ -66,8 +66,8 @@
         </div>
 
         <div class="modal-foot">
-            <button id="btn-submit-update" onclick="submitUpdate()">Save Changes</button>
             <button class="btn-secondary" onclick="requestCloseUpdateModal()">Cancel</button>
+            <button id="btn-submit-update" onclick="submitUpdate()">Save Changes</button>
         </div>
     </div>
 </div>
@@ -92,9 +92,9 @@
             <option value="Prio 2">Priority 2 (Medium)</option>
             <option value="Prio 3">Priority 3 (Low)</option>
         </select>
-        <div class="u-baris u-baris-mt">
-            <button id="btn-submit-priority" onclick="submitPriority()">Save Priority</button>
+        <div class="modal-aksi u-baris-mt">
             <button class="btn-secondary" onclick="closePriorityModal()">Cancel</button>
+            <button id="btn-submit-priority" onclick="submitPriority()">Save Priority</button>
         </div>
     </div>
 </div>
@@ -107,9 +107,9 @@
         <label class="u-label">Select Category:</label>
         <!-- Opsinya diisi openCategoryModal() dari kategori aktif (js/categories.js). -->
         <select class="u-mt-6" id="cat-select"></select>
-        <div class="u-baris u-baris-mt">
-            <button id="btn-submit-category" onclick="submitCategory()">Save Category</button>
+        <div class="modal-aksi u-baris-mt">
             <button class="btn-secondary" onclick="closeCategoryModal()">Cancel</button>
+            <button id="btn-submit-category" onclick="submitCategory()">Save Category</button>
         </div>
     </div>
 </div>
@@ -139,9 +139,9 @@
 
         <div id="catf-schedule" class="u-mt-6"></div>
 
-        <div class="u-baris u-baris-mt">
-            <button id="btn-submit-category-form" onclick="submitCategoryForm()">Save Category</button>
+        <div class="modal-aksi u-baris-mt">
             <button class="btn-secondary" onclick="closeCategoryForm()">Cancel</button>
+            <button id="btn-submit-category-form" onclick="submitCategoryForm()">Save Category</button>
         </div>
     </div>
 </div>
@@ -153,9 +153,9 @@
         <p class="subtitle u-mb-15">Outside its show window the issue is hidden from Dept Head &amp; KTT and does not block logout.</p>
         <input type="hidden" id="isch-issue-id">
         <div id="isch-schedule"></div>
-        <div class="u-baris u-baris-mt">
-            <button id="btn-submit-issue-schedule" onclick="submitIssueSchedule()">Save Schedule</button>
+        <div class="modal-aksi u-baris-mt">
             <button class="btn-secondary" onclick="closeIssueScheduleModal()">Cancel</button>
+            <button id="btn-submit-issue-schedule" onclick="submitIssueSchedule()">Save Schedule</button>
         </div>
     </div>
 </div>
@@ -164,9 +164,9 @@
     <div class="modal-box" style="width: 380px;">
         <h3 class="u-judul" id="confirm-title">Confirmation</h3>
         <p id="confirm-message" style="color: #6b7280; margin-bottom: 24px; font-size: 14px; line-height: 1.5; white-space: pre-wrap;">Confirmation message here</p>
-        <div style="display: flex; gap: 10px; justify-content: center;">
-            <button id="btn-confirm-yes" class="btn-danger">Yes, Continue</button>
+        <div class="modal-aksi u-baris-mt">
             <button class="btn-secondary" onclick="closeCustomConfirm()">Cancel</button>
+            <button id="btn-confirm-yes" class="btn-danger">Yes, Continue</button>
         </div>
     </div>
 </div>
@@ -192,9 +192,9 @@
         <label class="u-label">New Password:</label>
         <input type="password" id="edit-user-password" placeholder="Leave blank to keep current password" style="margin-top: 4px; margin-bottom: 4px;" autocomplete="new-password">
         <div style="font-size: 11px; color: #9ca3af; margin-bottom: 12px;">* Only fill this in if you want to reset the password.</div>
-        <div style="display: flex; gap: 10px; margin-top: 20px;">
-            <button onclick="submitEditUser()">Save Changes</button>
+        <div class="modal-aksi u-baris-mt">
             <button class="btn-secondary" onclick="closeEditUserModal()">Cancel</button>
+            <button onclick="submitEditUser()">Save Changes</button>
         </div>
     </div>
 </div>
@@ -206,9 +206,9 @@
         <input type="hidden" id="edit-dept-id">
         <label class="u-label">New Department Name:</label>
         <input class="u-mt-6" type="text" id="edit-dept-name" autocomplete="off">
-        <div class="u-baris u-baris-mt">
-            <button onclick="submitEditDepartment()">Save Changes</button>
+        <div class="modal-aksi u-baris-mt">
             <button class="btn-secondary" onclick="closeEditDeptModal()">Cancel</button>
+            <button onclick="submitEditDepartment()">Save Changes</button>
         </div>
     </div>
 </div>
@@ -223,9 +223,9 @@
         <label class="u-label">New Target Due Date:</label>
         <input type="date" id="due-date-input" style="margin-top: 6px; width: 100%; border: 1px solid #d1d5db; padding: 8px; border-radius: 6px;">
         
-        <div class="u-baris u-baris-mt">
-            <button id="btn-submit-duedate" onclick="submitDueDate()">Save Changes</button>
+        <div class="modal-aksi u-baris-mt">
             <button class="btn-secondary" onclick="closeDueDateModal()">Cancel</button>
+            <button id="btn-submit-duedate" onclick="submitDueDate()">Save Changes</button>
         </div>
     </div>
 </div>
@@ -263,9 +263,9 @@
             </div>
         </div>
 
-        <div style="display: flex; gap: 10px; align-items: center; margin-top: 16px;">
-            <button id="btn-import-submit" onclick="submitImportRows()" disabled>Import Now</button>
+        <div class="modal-aksi u-baris-mt">
             <button class="btn-secondary" onclick="closeImportModal()">Cancel</button>
+            <button id="btn-import-submit" onclick="submitImportRows()" disabled>Import Now</button>
             <span id="import-progress" style="font-size: 12px; color: #6b7280; font-weight: 600;"></span>
         </div>
     </div>
@@ -285,9 +285,9 @@
             <option value="">-- Unassigned --</option>
         </select>
 
-        <div class="u-baris u-baris-mt">
-            <button id="btn-submit-assignment" onclick="submitEditAssignment()">Save Changes</button>
+        <div class="modal-aksi u-baris-mt">
             <button class="btn-secondary" onclick="closeEditAssignmentModal()">Cancel</button>
+            <button id="btn-submit-assignment" onclick="submitEditAssignment()">Save Changes</button>
         </div>
     </div>
 </div>
@@ -307,9 +307,9 @@
         <label class="u-label">Corrective Action:</label>
         <textarea id="edit-issue-corrective-action" rows="3" style="margin-top: 4px;"></textarea>
 
-        <div style="display: flex; gap: 10px; margin-top: 20px;">
-            <button id="btn-submit-edit-issue" onclick="submitEditIssue()">Save Changes</button>
+        <div class="modal-aksi u-baris-mt">
             <button class="btn-secondary" onclick="closeEditIssueModal()">Cancel</button>
+            <button id="btn-submit-edit-issue" onclick="submitEditIssue()">Save Changes</button>
         </div>
     </div>
 </div>
