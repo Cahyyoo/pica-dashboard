@@ -297,11 +297,11 @@ export function openMOMModal(format = 'pdf') {
     const btnGenerate = document.getElementById('btn-mom-generate');
     if (btnGenerate) btnGenerate.innerText = format === 'excel' ? 'Generate Excel' : 'Generate PDF';
 
-    document.getElementById('modal-mom-export').style.display = 'flex';
+    document.getElementById('modal-mom-export').classList.add('show');
 }
 
 export function closeMOMModal() {
-    document.getElementById('modal-mom-export').style.display = 'none';
+    document.getElementById('modal-mom-export').classList.remove('show');
 }
 
 export function submitMOMExport() {

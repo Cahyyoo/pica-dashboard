@@ -255,23 +255,48 @@ button:hover { background: var(--blue-light); color: #111827; } /* Saat di-hover
 /* ========================================== */
 /* ANIMASI MODAL MASUK & KELUAR               */
 /* ========================================== */
+/* GPU sengaja dimatikan (main.js), jadi setiap frame animasi dikerjakan CPU. Karena itu
+   animasinya dibatasi pada DUA properti yang cukup di-composite ulang tanpa layout/repaint:
+   `opacity` (overlay) dan `transform: translateY` (kotak). Versi lama memakai scale(0.8)
+   dengan easing memantul 0.4 detik -- scale memaksa kotak di-resample tiap frame, dan
+   pantulannya memperpanjang jarak tempuh. Sekarang: geser 12px, 160ms masuk / 120ms keluar.
+   Tidak ada `will-change` permanen: layer yang dipaksa selalu ada justru membebani memori.
+
+   display:none <-> flex dengan `allow-discrete` + @starting-style membuat animasi masuk DAN
+   keluar murni CSS: JS tetap cukup menambah/menghapus .show. Bonus, modal yang tertutup kini
+   benar-benar keluar dari layout (dulu hanya visibility:hidden, tetap ikut dihitung). */
 .modal-overlay {
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    position: fixed; inset: 0;
     background-color: rgba(0, 0, 0, 0.5);
-    display: flex !important; justify-content: center; align-items: center;
-    z-index: 9999; pointer-events: none; visibility: hidden; opacity: 0;
-    transition: visibility 0.3s, opacity 0.3s ease-in-out;
+    display: none; justify-content: center; align-items: center;
+    z-index: 9999; opacity: 0;
+    /* Overlay yang sedang memudar keluar tidak boleh menelan klik. */
+    pointer-events: none;
+    transition: opacity 120ms ease-in, display 120ms allow-discrete;
 }
-.modal-overlay.show { visibility: visible; opacity: 1; pointer-events: auto; }
+.modal-overlay.show {
+    display: flex; opacity: 1; pointer-events: auto;
+    transition-duration: 160ms; transition-timing-function: ease-out;
+}
+@starting-style { .modal-overlay.show { opacity: 0; } }
+
+/* Anak langsung = kotak modal: .modal-box, atau .modal-content milik modal MOM. */
+.modal-overlay > * { transform: translateY(12px); transition: transform 120ms ease-in; }
+.modal-overlay.show > * {
+    transform: none;
+    transition-duration: 160ms; transition-timing-function: ease-out;
+}
+@starting-style { .modal-overlay.show > * { transform: translateY(12px); } }
+
+@media (prefers-reduced-motion: reduce) {
+    .modal-overlay, .modal-overlay > * { transition: none; }
+}
 
 .modal-box {
     background: white; padding: 24px; border-radius: 8px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    transform: scale(0.8) translateY(-30px); opacity: 0;
-    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
     max-height: 90vh; overflow-y: auto; box-sizing: border-box;
 }
-.modal-overlay.show .modal-box { transform: scale(1) translateY(0); opacity: 1; }   
 .modal-box h3 { margin-top: 0; color: #111827; font-size: 18px;}
 .modal-box p { color: var(--teks-lembut); margin-bottom: 24px; font-size: 14px; line-height: 1.5;}
 

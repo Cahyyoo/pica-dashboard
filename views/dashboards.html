@@ -526,9 +526,10 @@
     </div>
 </div>
 
-<div id="modal-mom-detail" class="modal" style="visibility: hidden; opacity: 0; display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center; transition: opacity 0.25s ease, visibility 0.25s ease;">
-    
-    <div id="modal-mom-detail-content" class="modal-content" style="transform: scale(0.95); transition: transform 0.25s ease; max-width: 900px; width: 95%; background: #ffffff; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; max-height: 85vh; overflow: hidden;">
+<!-- Posisi, display & animasi dari .modal-overlay (style.css); dibuka lewat .show. -->
+<div id="modal-mom-detail" class="modal-overlay" style="background-color: rgba(0,0,0,0.6); z-index: 10000;">
+
+    <div id="modal-mom-detail-content" class="modal-content" style="max-width: 900px; width: 95%; background: #ffffff; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; max-height: 85vh; overflow: hidden;">
         
         <div style="padding: 20px 24px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; background: #ffffff;">
             <h2 style="margin: 0; color: #111827; font-size: 1.25rem;">Minutes of Meeting Detail</h2>

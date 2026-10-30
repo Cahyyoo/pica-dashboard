@@ -964,25 +964,12 @@ export async function viewMOMDetail(id) {
     document.getElementById('btn-redownload').setAttribute('onclick', `downloadMOMArchive(${id}, 'pdf')`);
     document.getElementById('btn-redownload-excel').setAttribute('onclick', `downloadMOMArchive(${id}, 'excel')`);
 
-    // Tampilkan Modal dengan Transisi
-    const modal = document.getElementById('modal-mom-detail');
-    const modalContent = document.getElementById('modal-mom-detail-content');
-    
-    modal.style.visibility = 'visible';
-    modal.style.opacity = '1';
-    if (modalContent) modalContent.style.transform = 'scale(1)';
+    // Animasi masuk/keluar ditangani .modal-overlay di style.css, sama dengan modal lain.
+    document.getElementById('modal-mom-detail').classList.add('show');
 }
 
 export function closeMOMDetail() {
-    const modal = document.getElementById('modal-mom-detail');
-    const modalContent = document.getElementById('modal-mom-detail-content');
-    
-    modal.style.opacity = '0';
-    if (modalContent) modalContent.style.transform = 'scale(0.95)';
-    
-    setTimeout(() => {
-        modal.style.visibility = 'hidden';
-    }, 250); 
+    document.getElementById('modal-mom-detail').classList.remove('show');
 }
 
 // ==========================================
