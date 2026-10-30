@@ -461,7 +461,8 @@ export function getDailyUpdateBadge(issue) {
     // "wajib diupdate hari ini" -- akan menyesatkan di sini. Lencana hijau tetap
     // ditampilkan kalau PIC memang sempat mengupdate, supaya MD bisa membedakan
     // Continue yang masih dikerjakan dari yang didiamkan.
-    if (issue.status === 'Continue') {
+    // Issue di luar jadwal tampil juga tidak wajib diisi hari ini (lihat blokTugasPic).
+    if (issue.status === 'Continue' || issueTersembunyi(issue)) {
         return hasUpdatedToday(issue)
             ? '<span class="badge badge-updated">✅ Updated Today</span>'
             : '<span class="badge badge-exempt">⏸ Not Required</span>';
@@ -533,6 +534,9 @@ export function saringIssueUntukEkspor(issues, users) {
     const status   = nilai('filter-status-md') || 'All';
     const scale    = nilai('filter-scale-md') || 'All';
     const category = nilai('filter-category-md') || 'All';
+    const visibility = nilai('filter-visibility-md') || 'All';
+    // KTT tidak pernah melihat issue di luar jadwal tampil -- di layar maupun di ekspor.
+    const sembunyikanTerjadwal = peranTerbatasJadwal();
     const startStr = nilai('filter-date-start-md');
     const endStr   = nilai('filter-date-end-md');
 
@@ -549,6 +553,9 @@ export function saringIssueUntukEkspor(issues, users) {
         if (status === 'All' ? item.status === 'Closed' : item.status !== status) return false;
         if (scale !== 'All' && item.priority !== scale) return false;
         if (category !== 'All' && item.category !== category) return false;
+        if (sembunyikanTerjadwal && issueTersembunyi(item)) return false;
+        if (visibility === 'Visible' && issueTersembunyi(item)) return false;
+        if (visibility === 'Hidden' && !issueTersembunyi(item)) return false;
 
         if (startMs !== null || endMs !== null) {
             const t = new Date(item.createdAt).getTime();
@@ -702,12 +709,22 @@ export function riwayatTerbaru(histories) {
     return terbaru || daftar[0] || null;
 }
 
-// Label kategori seperti yang dilihat orang di form Create Issue dan modal Change
-// Category. Nilai yang DISIMPAN tetap 'Weekly', tapi yang tertulis di sana "Weekly BOD".
-// Ditaruh di sini (bukan modul-lokal di issue-dashboard.js) karena layar kategori PIC dan
-// tabelnya sama-sama membutuhkannya.
-export const LABEL_KATEGORI = { Daily: 'Daily', Weekly: 'Weekly BOD', Midyear: 'Midyear', Annual: 'Annual' };
-export const URUTAN_KATEGORI = ['Daily', 'Weekly', 'Midyear', 'Annual'];
+// Label & urutan kategori kini dikelola MD -- lihat js/categories.js (labelKategori,
+// daftarKategori). Dulu dua konstanta LABEL_KATEGORI/URUTAN_KATEGORI di sini.
+
+// -- Jadwal tampil/sembunyi -----------------------------------------------------
+// `visibility` dihitung BACKEND (src/common/schedule.util.ts) dan ditempelkan ke setiap
+// issue; frontend tidak pernah menghitung ulang. Issue yang sedang tersembunyi tidak
+// terlihat oleh Dept Head & KTT dan tidak mengunci Logout. MD tetap melihat semuanya.
+// Data dari backend versi lama tidak membawa `visibility` -> dianggap tampil.
+export function issueTersembunyi(issue) {
+    return !!(issue && issue.visibility && issue.visibility.visible === false);
+}
+
+/** Role yang tidak boleh melihat issue di luar jadwal tampilnya. */
+export function peranTerbatasJadwal(role = localStorage.getItem('user_role')) {
+    return role === 'Dept Head' || role === 'KTT';
+}
 
 // -- Klasifikasi tugas dari sudut pandang PIC ---------------------------------
 // SATU sumber kebenaran, dipakai layar Task List DAN checkDailyUpdates().
@@ -720,9 +737,14 @@ export const BLOK_BELUM = 'belum';       // wajib hari ini, belum diisi -> MENGU
 export const BLOK_SUDAH = 'sudah';       // wajib hari ini, sudah diisi
 export const BLOK_TAKWAJIB = 'takwajib'; // status Continue: sengaja dilanjutkan besok
 export const BLOK_ARSIP = 'arsip';       // Closed, atau user cuma mantan PIC
+export const BLOK_TERJADWAL = 'terjadwal'; // di luar jadwal tampil: TIDAK digambar, TIDAK mengunci Logout
 
 export function blokTugasPic(issue, userId) {
     if (!issue) return BLOK_ARSIP;
+
+    // Dicek paling awal: issue di luar jadwal tampilnya tidak boleh muncul di blok mana pun,
+    // tidak dihitung di kartu kategori, penanda menu, alarm jam 10, maupun kunci Logout.
+    if (issueTersembunyi(issue)) return BLOK_TERJADWAL;
 
     // Bukan pemegang saat ini (hanya pernah dioper lewat), atau sudah selesai.
     if (String(issue.picId) !== String(userId)) return BLOK_ARSIP;

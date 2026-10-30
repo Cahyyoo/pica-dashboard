@@ -781,6 +781,7 @@ button:hover { background: var(--blue-light); color: #111827; } /* Saat di-hover
 .filt-cari .search-input { width: 100%; height: 38px; }
 
 .filt-grup { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.filt-grup[hidden] { display: none; }   /* filter jadwal disembunyikan untuk KTT */
 .filt-label { font-size: 13px; color: var(--teks-lembut); font-weight: 500; white-space: nowrap; }
 
 .filt-select { margin: 0; padding: 0 8px; font-size: 13px; border-radius: 8px;
@@ -825,3 +826,42 @@ button:hover { background: var(--blue-light); color: #111827; } /* Saat di-hover
 .u-mb-15.u-mb-15 { margin-bottom: 15px; }
 .u-mt-6.u-mt-6 { margin-top: 6px; }
 .u-mt4-mb12.u-mt4-mb12 { margin-top: 4px; margin-bottom: 12px; }
+
+
+/* ========================================== */
+/* KATEGORI & JADWAL TAMPIL/SEMBUNYI ISSUE    */
+/* ========================================== */
+/* Penanda issue di luar jadwal tampil (hanya terlihat oleh MD). Ungu, sama dengan Continue:
+   keduanya berarti "tidak mengunci Logout hari ini". */
+.badge-hidden { background: var(--aksen-ungu); color: var(--aksen-ungu-teks); white-space: nowrap; margin-left: 4px; }
+
+/* Tombol naik/turun urutan & hapus yang dinonaktifkan di tabel Manage Categories. */
+.btn-ikon { padding: 4px 8px; line-height: 1; }
+.btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-danger:disabled:hover { background: #fee2e2; }
+.baris-nonaktif td { color: var(--teks-redup); }
+
+.modal-box-jadwal { width: 560px; max-width: 95vw; text-align: left; }
+.jadwal-dua-kolom  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.jadwal-tiga-kolom { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.jadwal-dua-kolom input, .jadwal-dua-kolom select,
+.jadwal-tiga-kolom input, .jadwal-isi input[type="number"] { margin-bottom: 8px; }
+.jadwal-isi [hidden] { display: none; }
+
+/* Aturan global `input { width:100%; padding }` membuat checkbox/radio melebar. */
+.jadwal-cek, .jadwal-mode-opsi { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: var(--teks); cursor: pointer; }
+.jadwal-cek input, .jadwal-mode-opsi input, .jadwal-chip input { width: auto; margin: 2px 0 0; padding: 0; flex-shrink: 0; }
+
+.jadwal-mode { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.jadwal-mode-opsi { padding: 10px 12px; border: 1px solid var(--garis); border-radius: 8px; }
+.jadwal-mode-opsi > span { display: flex; flex-direction: column; gap: 2px; }
+.jadwal-mode-opsi:has(input:checked) { border-color: var(--blue-dark); background: var(--blue-pale); }
+
+.jadwal-hari { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; margin-bottom: 8px; }
+.jadwal-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--garis);
+               border-radius: 99px; font-size: 13px; cursor: pointer; user-select: none; }
+.jadwal-chip:has(input:checked) { border-color: var(--blue-dark); background: var(--blue-pale); color: var(--blue-dark); font-weight: 600; }
+
+.jadwal-pratinjau { margin-top: 4px; padding: 10px 12px; background: var(--latar); border-radius: 8px; font-size: 13px; color: var(--teks); }
+.jadwal-pratinjau:empty { display: none; }
+.jadwal-pratinjau ul { margin: 6px 0 0; padding-left: 18px; }

@@ -22,12 +22,9 @@
 
                 <div class="form-group">
                     <label>Category <span class="u-bahaya">*</span></label>
+                    <!-- Opsinya diisi isiSelectKategori() (js/categories.js) dari daftar yang dikelola MD. -->
                     <select id="issue-category" required>
                         <option value="">-- Select Category --</option>
-                        <option value="Daily">Daily</option>
-                        <option value="Weekly">Weekly BOD</option>
-                        <option value="Midyear">Midyear</option>
-                        <option value="Annual">Annual</option>
                     </select>
                 </div>
 
@@ -185,6 +182,11 @@
                     <span class="u-petunjuk">Category:</span>
                     <div id="detail-category" style="font-size: 14px; color: #111827; font-weight: 600; margin-top: 2px;">-</div>
                 </div>
+                <!-- Hanya MD yang melihat baris ini; Dept Head & KTT tidak perlu tahu issue punya jadwal. -->
+                <div class="u-mb-4" id="detail-schedule-row" hidden>
+                    <span class="u-petunjuk">Show Schedule:</span>
+                    <div id="detail-schedule" style="font-size: 13px; color: #111827; margin-top: 2px;">-</div>
+                </div>
                 <div class="u-mb-4">
                     <span class="u-petunjuk">Current Status:</span>
                     <div class="u-mt-6" id="detail-status">-</div>
@@ -271,10 +273,16 @@
                 <span class="filt-label">Category:</span>
                 <select id="filter-category-md" class="filt-select" onchange="applyFilterMD()">
                     <option value="All">All Categories</option>
-                    <option value="Daily">Daily</option>
-                    <option value="Weekly">Weekly BOD</option>
-                    <option value="Midyear">Midyear</option>
-                    <option value="Annual">Annual</option>
+                </select>
+            </div>
+
+            <!-- Khusus MD (disembunyikan untuk KTT, yang memang tidak pernah melihat issue tersembunyi). -->
+            <div class="filt-grup" id="filter-visibility-grup">
+                <span class="filt-label">Schedule:</span>
+                <select id="filter-visibility-md" class="filt-select" onchange="applyFilterMD()">
+                    <option value="All">All</option>
+                    <option value="Visible">Shown now</option>
+                    <option value="Hidden">Hidden now</option>
                 </select>
             </div>
         </div>
@@ -395,6 +403,39 @@
                     <tbody id="tbody-manage-dept"></tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Manage Categories (khusus MD). Tambah & edit memakai modal #modal-category-form karena
+     form jadwalnya terlalu besar untuk kolom kiri ala Manage Departments. -->
+<div id="view-manage-category" class="screen">
+    <div class="card card-wide u-mw-1000">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; gap: 12px;">
+            <div>
+                <h2 style="margin: 0; font-size: 22px;">Manage Categories</h2>
+                <p class="u-petunjuk" style="margin: 4px 0 0;">Issues in a scheduled category are hidden from Dept Head &amp; KTT outside their show window, and do not block logout.</p>
+            </div>
+            <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                <button class="btn-sm" onclick="openCategoryForm()">+ Add Category</button>
+                <button class="btn-secondary btn-sm" onclick="backToMenu()">Back</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table style="min-width: 100%;">
+                <thead>
+                    <tr>
+                        <th style="width: 70px; text-align: center;">Order</th>
+                        <th>Name</th>
+                        <th>Show Schedule</th>
+                        <th style="width: 80px; text-align: center;">Issues</th>
+                        <th style="width: 90px; text-align: center;">Status</th>
+                        <th style="width: 210px; text-align: center;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody-manage-category"></tbody>
+            </table>
         </div>
     </div>
 </div>

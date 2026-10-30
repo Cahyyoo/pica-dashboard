@@ -4,10 +4,11 @@ Aplikasi desktop (Electron) untuk pelaporan dan pemantauan tindakan korektif (*C
 
 ## Fitur Utama
 
-- **Pelaporan Issue** — buat laporan baru lengkap dengan Corrective Action, Priority, Category (Daily/Weekly/Midyear/Annual), dan Due Date.
+- **Pelaporan Issue** — buat laporan baru lengkap dengan Corrective Action, Priority, Category, dan Due Date.
 - **Update Progress** — PIC (Dept Head) mengisi update progres per poin, masing-masing dengan status sendiri (In Progress/Closed).
 - **Monitoring Dashboard (MD)** — tabel semua issue dengan filter (status, department, category, tanggal), edit assignment, edit/delete issue, ubah priority/category/due date.
-- **Task List (Dept Head)** — daftar tugas milik sendiri, dikelompokkan per Category.
+- **Task List (Dept Head)** — daftar tugas milik sendiri, dipilih lewat kartu per Category.
+- **Manage Categories (MD)** — tambah/ubah/urutkan/nonaktifkan kategori issue, lengkap dengan **jadwal tampil/sembunyi** (harian/tiap N hari, mingguan per hari, bulanan per tanggal, tiap 3 bulan, tahunan/tiap N bulan, tampil selama N hari). Jadwal bisa di-override per issue (Follow category / Always shown / Custom) dari layar detail. Di luar jendela tampilnya, issue tersembunyi dari Dept Head & KTT dan tidak mengunci Logout; MD tetap melihat semuanya dengan penanda *Hidden* dan filter *Schedule*.
 - **Export PDF & Excel** — format Minutes of Meeting (MOM), termasuk arsip MOM.
 - **Import Excel** — bulk import issue dari file Excel.
 - **Manajemen User & Department** — CRUD akun dan department (khusus MD).
@@ -49,6 +50,8 @@ Aplikasi desktop (Electron) untuk pelaporan dan pemantauan tindakan korektif (*C
 │   ├── issue-guard.js         # Validasi gembok harian (wajib update sebelum logout/exit)
 │   ├── issue-state.js         # State global in-memory
 │   ├── departements.js        # CRUD department
+│   ├── categories.js          # Cache & CRUD kategori (Manage Categories), label & dropdown kategori
+│   ├── schedule-form.js       # Form jadwal tampil/sembunyi (dipakai modal kategori & modal jadwal issue)
 │   ├── issues.js              # Barrel re-export modul issue-*
 │   └── utils.js               # Helper umum (WITA timezone, modal, alert, dll.)
 ├── views/                   # Fragmen HTML per screen (dimuat dinamis)

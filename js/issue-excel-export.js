@@ -10,6 +10,7 @@
 // penuh fill color, border, font, dan embed gambar, sehingga hasil Excel-nya bisa benar-benar
 // mirip export PDF.
 import { showCustomAlert, formatWitaDate, stripAutoForwardNotes, archiveMOMRecord, getBase64Image, reportActivity, saringIssueUntukEkspor, riwayatTerbaru, beriNapasUI } from './utils.js';
+import { labelKategori } from './categories.js';
 import { state } from './issue-state.js';
 
 function getExcelJS() {
@@ -272,7 +273,7 @@ export async function exportFilteredIssuesToExcel(role, momData = null) {
             formatWitaDate(item.dueDate, 'en-US'),
             item.status,
             remarks,
-            item.category || '-',
+            item.category ? labelKategori(item.category) : '-',
             item.priority || 'Prio 2'
         ];
 

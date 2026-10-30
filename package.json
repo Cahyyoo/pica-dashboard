@@ -1,6 +1,6 @@
 {
   "name": "pica-system",
-  "version": "2.3.2",
+  "version": "2.4.0",
   "description": "Aplikasi PICA Dashboard",
   "main": "main.js",
   "scripts": {
@@ -71,13 +71,6 @@
         "nsis"
       ],
       "icon": "public/img/icon_pica.png"
-    },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "Cahyyoo",
-        "repo": "pica-dashboard"
-      }
-    ]
+    }
   }
 }

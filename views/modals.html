@@ -105,15 +105,57 @@
         <p class="subtitle u-mb-15">Set the reporting category for this issue.</p>
         <input type="hidden" id="cat-issue-id">
         <label class="u-label">Select Category:</label>
-        <select class="u-mt-6" id="cat-select">
-            <option value="Daily">Daily</option>
-            <option value="Weekly">Weekly BOD</option>
-            <option value="Midyear">Midyear</option>
-            <option value="Annual">Annual</option>
-        </select>
+        <!-- Opsinya diisi openCategoryModal() dari kategori aktif (js/categories.js). -->
+        <select class="u-mt-6" id="cat-select"></select>
         <div class="u-baris u-baris-mt">
             <button id="btn-submit-category" onclick="submitCategory()">Save Category</button>
             <button class="btn-secondary" onclick="closeCategoryModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Tambah / edit kategori (Manage Categories, khusus MD). Isi #catf-schedule dirender
+     renderScheduleForm() di js/schedule-form.js. -->
+<div id="modal-category-form" class="modal-overlay">
+    <div class="modal-box modal-box-jadwal">
+        <h3 class="u-judul" id="catf-title">Add Category</h3>
+        <p class="subtitle u-mb-15">The name is what gets stored on each issue; the label is what people see.</p>
+        <input type="hidden" id="catf-id">
+
+        <div class="jadwal-dua-kolom">
+            <div>
+                <label class="u-label">Name <span class="u-bahaya">*</span></label>
+                <input class="u-mt-6" type="text" id="catf-name" maxlength="50" placeholder="Example: Monthly" autocomplete="off">
+            </div>
+            <div>
+                <label class="u-label">Display Label (optional)</label>
+                <input class="u-mt-6" type="text" id="catf-label" maxlength="100" placeholder="Example: Monthly Review" autocomplete="off">
+            </div>
+        </div>
+
+        <label class="jadwal-cek u-mt-6">
+            <input type="checkbox" id="catf-active" checked> Active (available when creating / importing issues)
+        </label>
+
+        <div id="catf-schedule" class="u-mt-6"></div>
+
+        <div class="u-baris u-baris-mt">
+            <button id="btn-submit-category-form" onclick="submitCategoryForm()">Save Category</button>
+            <button class="btn-secondary" onclick="closeCategoryForm()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Jadwal tampil per issue (khusus MD): ikut kategori / selalu tampil / custom. -->
+<div id="modal-issue-schedule" class="modal-overlay">
+    <div class="modal-box modal-box-jadwal">
+        <h3 class="u-judul">Issue Show Schedule</h3>
+        <p class="subtitle u-mb-15">Outside its show window the issue is hidden from Dept Head &amp; KTT and does not block logout.</p>
+        <input type="hidden" id="isch-issue-id">
+        <div id="isch-schedule"></div>
+        <div class="u-baris u-baris-mt">
+            <button id="btn-submit-issue-schedule" onclick="submitIssueSchedule()">Save Schedule</button>
+            <button class="btn-secondary" onclick="closeIssueScheduleModal()">Cancel</button>
         </div>
     </div>
 </div>
@@ -191,7 +233,7 @@
 <div id="modal-import-excel" class="modal-overlay">
     <div class="modal-box" style="width: 720px; max-width: 95vw; text-align: left; max-height: 88vh; display: flex; flex-direction: column;">
         <h3 class="u-judul">Import Issues from Excel</h3>
-        <p class="subtitle" style="margin-bottom: 12px;">Upload an .xlsx/.xls/.csv file following the expected column layout: Case/Notification, Date Issue, Issued, Corrective Action, PIC, Due Date, Stat, Remark, SCALE, Category. The "Issued" and "PIC" columns are kept as reference notes only — Issued By, PIC, and Department will all default to MD. Category defaults to "Daily" if left blank or not recognized (Daily/Weekly/Midyear/Annual).</p>
+        <p class="subtitle" style="margin-bottom: 12px;">Upload an .xlsx/.xls/.csv file following the expected column layout: Case/Notification, Date Issue, Issued, Corrective Action, PIC, Due Date, Stat, Remark, SCALE, Category. The "Issued" and "PIC" columns are kept as reference notes only — Issued By, PIC, and Department will all default to MD. Category is matched by name or label to the active categories (Manage Categories); a blank or unrecognized value falls back to the first active category.</p>
 
         <div style="margin-bottom: 8px;">
             <label class="u-label">Excel File:</label>

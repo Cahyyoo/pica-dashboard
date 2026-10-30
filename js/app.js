@@ -14,6 +14,7 @@ import {
     openDueDateModal, closeDueDateModal, submitDueDate, checkDailyUpdates, ringkasanTertunda, perbaruiBadgeMenuPic, openAttachmentModal, closeAttachmentModal, updateFileNameDisplay, openMOMModal, submitMOMExport, closeMOMModal, loadMOMArchives, viewMOMDetail, refreshMOMArchives, closeMOMDetail, downloadMOMArchive,
     openEditAssignmentModal, closeEditAssignmentModal, submitEditAssignment,
     openCategoryModal, closeCategoryModal, submitCategory,
+    openIssueScheduleModal, closeIssueScheduleModal, submitIssueSchedule,
     openEditIssueModal, closeEditIssueModal, submitEditIssue, confirmDeleteIssue,
     toggleEvidenceHint
 } from './issues.js';
@@ -21,6 +22,10 @@ import {
     loadAdminDepartments, submitNewDepartment, deleteDepartment,
     openEditDeptModal, closeEditDeptModal, submitEditDepartment
 } from './departements.js';
+import {
+    muatDropdownKategori, loadAdminCategories, openCategoryForm, closeCategoryForm, submitCategoryForm,
+    toggleCategoryActive, deleteCategory, moveCategory
+} from './categories.js';
 import {
     openImportModal, closeImportModal, downloadImportTemplate, handleImportFileSelect, submitImportRows
 } from './issue-import.js';
@@ -34,6 +39,7 @@ window.showView = (viewId) => {
     else if (viewId === 'view-pic-category') muatKategoriPic();
     else if (viewId === 'view-admin') loadAdminUsers();
     else if (viewId === 'view-manage-dept') loadAdminDepartments();
+    else if (viewId === 'view-manage-category') loadAdminCategories();
     else if (viewId === 'view-mom-archive') loadMOMArchives();
     else if (viewId === 'view-login-logs') loadLoginLogs();
     // Menu PIC: segarkan penanda tunggakan di tombol "Update Task List".
@@ -79,6 +85,9 @@ window.submitPriority = submitPriority;
 window.openCategoryModal = openCategoryModal;
 window.closeCategoryModal = closeCategoryModal;
 window.submitCategory = submitCategory;
+window.openIssueScheduleModal = openIssueScheduleModal;
+window.closeIssueScheduleModal = closeIssueScheduleModal;
+window.submitIssueSchedule = submitIssueSchedule;
 window.openEditIssueModal = openEditIssueModal;
 window.closeEditIssueModal = closeEditIssueModal;
 window.submitEditIssue = submitEditIssue;
@@ -89,6 +98,13 @@ window.openEditDeptModal = openEditDeptModal;
 window.closeEditDeptModal = closeEditDeptModal;
 window.submitEditDepartment = submitEditDepartment;
 window.deleteDepartment = deleteDepartment;
+
+window.openCategoryForm = openCategoryForm;
+window.closeCategoryForm = closeCategoryForm;
+window.submitCategoryForm = submitCategoryForm;
+window.toggleCategoryActive = toggleCategoryActive;
+window.deleteCategory = deleteCategory;
+window.moveCategory = moveCategory;
 
 window.showCustomAlert = showCustomAlert;
 window.closeCustomAlert = closeCustomAlert;
@@ -187,6 +203,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // TAHAP B: JALANKAN LOGIKA DATA SETELAH HTML SIAP
     // Karena HTML sudah terbentuk, JS kini bisa menemukan elemen seperti 'issue-dept'
     loadDepartments();
+    // Dropdown kategori (form Create Issue, filter MD) -- daftarnya dikelola MD di server.
+    muatDropdownKategori();
 
     // Mode Guest terkunci (SSID SPRM-GUEST, backend tak terjangkau): tampilkan banner
     // peringatan persisten. Ini murni indikator visual -- penegakan sebenarnya (Exit App

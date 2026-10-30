@@ -5,6 +5,8 @@ import { state } from './issue-state.js';
 import { loadDashboardMD, loadDashboardPIC } from './issue-dashboard.js';
 import { openDetailView, backFromDetail } from './issue-detail.js';
 import { PESAN_SESI_DITOLAK, paksaLoginUlang } from './session.js';
+import { isiSelectKategori, kategoriDefault, cariKategori, muatKategori } from './categories.js';
+import { renderScheduleForm, bacaScheduleForm } from './schedule-form.js';
 
 // Dibungkus kirimSekali(): tombolnya dikunci selama permintaan berjalan, supaya
 // ketukan kedua tidak membuat baris/perubahan kembar.
@@ -35,8 +37,20 @@ async function submitIssueInti() {
             document.getElementById('issue-corrective-action').value = '';
             document.getElementById('issue-category').value = '';
             window.backToMenu();
-        } else showCustomAlert("Failed", "Server error occurred.");
+        } else showCustomAlert("Failed", await pesanGalatServer(response, "Server error occurred."));
     } catch (error) { showCustomAlert("Server Error", "Failed to connect to backend."); }
+}
+
+// Pesan validasi dari backend (mis. "Kategori X sudah dinonaktifkan") lebih berguna daripada
+// pesan umum. Bentuk NestJS: { message: string | string[] }.
+async function pesanGalatServer(response, cadangan) {
+    try {
+        const data = await response.json();
+        const pesan = Array.isArray(data.message) ? data.message.join('\n') : data.message;
+        return pesan || cadangan;
+    } catch {
+        return cadangan;
+    }
 }
 
 export function openUpdateFromDetail() {
@@ -885,7 +899,10 @@ async function submitPriorityInti() {
 // ==========================================
 export function openCategoryModal(id, currentCategory) {
     document.getElementById('cat-issue-id').value = id;
-    document.getElementById('cat-select').value = currentCategory || 'Daily';
+    // Hanya kategori aktif yang bisa dipilih; kategori issue saat ini tetap tercantum walau
+    // sudah dinonaktifkan, supaya modal tidak diam-diam menampilkan pilihan lain.
+    const terpilih = cariKategori(currentCategory)?.name || kategoriDefault();
+    isiSelectKategori('cat-select', { hanyaAktif: true, terpilih });
     document.getElementById('modal-category').classList.add('show');
 }
 
@@ -906,7 +923,53 @@ async function submitCategoryInti() {
             showCustomAlert("Success", "Category updated successfully!");
             await loadDashboardMD();
             if (document.getElementById('view-issue-detail').classList.contains('active')) await openDetailView(Number(id));
-        } else showCustomAlert("Failed", "An error occurred.");
+        } else showCustomAlert("Failed", await pesanGalatServer(response, "An error occurred."));
+    } catch (error) { showCustomAlert("Error", "Server error."); }
+}
+
+// ==========================================
+// JADWAL TAMPIL PER ISSUE (HANYA UNTUK MD)
+// ==========================================
+export async function openIssueScheduleModal(id) {
+    const issueId = Number(id);
+    const issue = (state.detailIssue && state.detailIssue.id === issueId)
+        ? state.detailIssue
+        : (state.globalIssues || []).find(i => i.id === issueId);
+    if (!issue) return showCustomAlert("Error", "Issue not found. Please refresh the data.");
+
+    // Keterangan opsi "Follow category" butuh jadwal kategori yang terbaru.
+    try { await muatKategori(); } catch (e) { /* tetap buka; keterangannya saja yang kosong */ }
+    const k = cariKategori(issue.category);
+
+    document.getElementById('isch-issue-id').value = issueId;
+    renderScheduleForm(document.getElementById('isch-schedule'), {
+        jenis: 'issue',
+        mode: issue.scheduleMode || 'INHERIT',
+        schedule: issue.scheduleMode === 'CUSTOM' ? issue.schedule : null,
+        jadwalKategori: k ? k.schedule : null,
+    });
+    document.getElementById('modal-issue-schedule').classList.add('show');
+}
+
+export function closeIssueScheduleModal() { document.getElementById('modal-issue-schedule').classList.remove('show'); }
+
+export const submitIssueSchedule = () => kirimSekali('btn-submit-issue-schedule', 'Saving...', submitIssueScheduleInti);
+async function submitIssueScheduleInti() {
+    const id = document.getElementById('isch-issue-id').value;
+    const hasil = bacaScheduleForm(document.getElementById('isch-schedule'), 'issue');
+    if (hasil.galat) return showCustomAlert("Warning", hasil.galat);
+
+    try {
+        const response = await fetch(`${API_URL}/issue/schedule/${id}`, {
+            method: 'PATCH', headers: getAuthHeaders(),
+            body: JSON.stringify({ mode: hasil.mode, schedule: hasil.schedule }),
+        });
+        if (response.ok) {
+            closeIssueScheduleModal();
+            showCustomAlert("Success", "Issue schedule updated successfully!");
+            await loadDashboardMD();
+            if (document.getElementById('view-issue-detail').classList.contains('active')) await openDetailView(Number(id));
+        } else showCustomAlert("Failed", await pesanGalatServer(response, "An error occurred."));
     } catch (error) { showCustomAlert("Error", "Server error."); }
 }
 

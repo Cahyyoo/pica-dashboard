@@ -10,6 +10,7 @@ import { API_URL, getAuthHeaders } from './config.js';
 import { showCustomAlert, reportActivity, escapeHtml, lupakanCacheIssue } from './utils.js';
 import { state } from './issue-state.js';
 import { loadDashboardMD, fetchUsersForMapping } from './issue-dashboard.js';
+import { muatKategori, kategoriAktif, kategoriDefault, labelKategori } from './categories.js';
 
 const EXPECTED_HEADERS = ['Case/Notification', 'Date Issue', 'Issued', 'Corrective Action', 'PIC', 'Due Date', 'Stat', 'Remark', 'SCALE', 'Category'];
 const DEFAULT_DEPARTMENT = 'MD';
@@ -49,12 +50,29 @@ function normalizePriority(text) {
     return 'Pending';
 }
 
+// Dicocokkan ke kategori AKTIF yang dikelola MD: pertama nama/label persis (tanpa beda huruf
+// besar/kecil), lalu teks sel yang MEMUAT nama/label (mis. "Weekly BOD meeting" -> Weekly;
+// yang terpanjang menang). Kosong/tidak dikenal -> kategori default; `fallback` menandai baris
+// itu di pratinjau supaya MD tahu sebelum menekan Import. Yang dikirim ke server adalah NAMA
+// hasil pemetaan ini; backend hanya memvalidasinya (dan jatuh ke default yang sama bila
+// kategori itu dinonaktifkan di antara pratinjau dan import).
 function normalizeCategory(text) {
-    const t = String(text || '').toLowerCase();
-    if (t.includes('week')) return 'Weekly';
-    if (t.includes('mid')) return 'Midyear';
-    if (t.includes('annual') || t.includes('year')) return 'Annual';
-    return 'Daily'; // Default kalau kolom Category kosong/tidak dikenali di file Excel
+    const t = String(text || '').trim().toLowerCase();
+    if (t) {
+        const aktif = kategoriAktif();
+        const persis = aktif.find(k => k.name.toLowerCase() === t || (k.label || '').toLowerCase() === t);
+        if (persis) return { category: persis.name, fallback: false };
+
+        let terbaik = null, panjang = 0;
+        for (const k of aktif) {
+            for (const kata of [k.name, k.label]) {
+                const c = String(kata || '').toLowerCase();
+                if (c && t.includes(c) && c.length > panjang) { terbaik = k; panjang = c.length; }
+            }
+        }
+        if (terbaik) return { category: terbaik.name, fallback: false };
+    }
+    return { category: kategoriDefault(), fallback: !!t };
 }
 
 function normalizeDueDate(text) {
@@ -80,7 +98,11 @@ function normalizeDueDate(text) {
 // MODAL: BUKA / TUTUP
 // ==========================================
 export async function openImportModal() {
-    await fetchUsersForMapping();
+    await Promise.all([
+        fetchUsersForMapping(),
+        // normalizeCategory() membaca daftar kategori secara sinkron.
+        muatKategori().catch(() => null),
+    ]);
 
     state.importRows = [];
     const fileInput = document.getElementById('import-file-input');
@@ -127,7 +149,7 @@ export async function downloadImportTemplate() {
             'Stat': 'Progress',
             'Remark': 'Additional notes...',
             'SCALE': 'Prio 2',
-            'Category': 'Daily'
+            'Category': labelKategori(kategoriDefault())
         };
         const ws = XLSX.utils.json_to_sheet([sampleRow], { header: EXPECTED_HEADERS });
         const wb = XLSX.utils.book_new();
@@ -218,6 +240,7 @@ export async function handleImportFileSelect(inputEl) {
             const title = get('title');
             if (!title) continue;
 
+            const kategori = normalizeCategory(get('category'));
             parsedRows.push({
                 title,
                 dateIssueRaw: get('dateIssue'),
@@ -226,7 +249,9 @@ export async function handleImportFileSelect(inputEl) {
                 status: normalizeStatus(get('status')),
                 remark: get('remark'),
                 priority: normalizePriority(get('priority')),
-                category: normalizeCategory(get('category')),
+                category: kategori.category,
+                categoryFallback: kategori.fallback,
+                categoryRaw: get('category'),
                 // Disimpan hanya sebagai referensi di Remark. Issued By & PIC selalu = MD yang login.
                 issuerRaw: get('issuer'),
                 picRaw: get('pic')
@@ -294,7 +319,7 @@ function renderImportPreview() {
             <td style="white-space:nowrap;">${escapeHtml(row.dueDate || '-')}</td>
             <td style="text-align:center;">${escapeHtml(row.status)}</td>
             <td style="text-align:center;">${escapeHtml(row.priority)}</td>
-            <td style="text-align:center;">${escapeHtml(row.category)}</td>
+            <td style="text-align:center;"${row.categoryFallback ? ` title="&quot;${escapeHtml(row.categoryRaw)}&quot; not recognized &mdash; default category used" class="u-bahaya"` : ''}>${escapeHtml(labelKategori(row.category))}${row.categoryFallback ? ' *' : ''}</td>
         </tr>`;
     });
 

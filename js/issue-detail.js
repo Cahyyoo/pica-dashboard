@@ -2,6 +2,8 @@
 import { API_URL, getAuthHeaders } from './config.js';
 import { showView, getStatusBadge, formatWitaDate, escapeHtml, buatPengecekEditable, showCustomAlert } from './utils.js';
 import { state } from './issue-state.js';
+import { labelKategori, kategoriDefault, cariKategori } from './categories.js';
+import { deskripsiJadwal, deskripsiVisibilitas } from './schedule-form.js';
 
 // Berapa entri riwayat yang digambar lebih dulu di layar detail; sisanya menyusul lewat tombol.
 // 20 dipilih karena sudah lebih panjang dari tinggi panel timeline di kiosk 1366x768, jadi pada
@@ -164,13 +166,21 @@ export async function openDetailView(id) {
 
     const elCategory = document.getElementById('detail-category');
     if (elCategory) {
-        const categoryText = issue.category || '-';
+        const categoryText = issue.category ? labelKategori(issue.category) : '-';
         if (role === 'MD') {
-            elCategory.innerHTML = `<span style="cursor:pointer; color:#16a34a; border-bottom: 1px dashed #16a34a;" onclick="openCategoryModal(${issue.id}, '${issue.category || 'Daily'}')" title="Change Category">${escapeHtml(categoryText)} ✏️</span>`;
+            // Nama kategori lewat data-*, bukan literal di dalam onclick: nama kini diketik MD
+            // dan tanda kutip di dalamnya akan merusak atribut.
+            elCategory.innerHTML = `<span style="cursor:pointer; color:#16a34a; border-bottom: 1px dashed #16a34a;" data-id="${issue.id}" data-cat="${escapeHtml(issue.category || kategoriDefault())}" onclick="openCategoryModal(this.dataset.id, this.dataset.cat)" title="Change Category">${escapeHtml(categoryText)} ✏️</span>`;
         } else {
             elCategory.innerText = categoryText;
         }
     }
+
+    // Jadwal tampil: hanya MD yang melihat dan mengubahnya.
+    const barisJadwal = document.getElementById('detail-schedule-row');
+    if (barisJadwal) barisJadwal.hidden = role !== 'MD';
+    const elJadwal = document.getElementById('detail-schedule');
+    if (elJadwal && role === 'MD') elJadwal.innerHTML = ringkasanJadwalIssue(issue);
 
     const currentUserId = Number(localStorage.getItem('user_id'));
 
@@ -418,3 +428,19 @@ window.tampilkanSeluruhRiwayat = function () {
     timelinePenuh = true;
     if (state.detailIssue) gambarTimeline(state.detailIssue);
 };
+
+// Isi baris "Show Schedule" di layar detail (khusus MD): asal jadwal + status saat ini.
+function ringkasanJadwalIssue(issue) {
+    const mode = issue.scheduleMode || 'INHERIT';
+    let asal;
+    if (mode === 'ALWAYS') asal = 'Always shown (category schedule ignored)';
+    else if (mode === 'CUSTOM') asal = 'Custom: ' + deskripsiJadwal(issue.schedule);
+    else {
+        const k = cariKategori(issue.category);
+        asal = 'Follows category: ' + deskripsiJadwal(k ? k.schedule : null);
+    }
+    const tersembunyi = issue.visibility && issue.visibility.visible === false;
+    const status = `<span class="badge ${tersembunyi ? 'badge-hidden' : 'badge-updated'}">${escapeHtml(deskripsiVisibilitas(issue.visibility))}</span>`;
+    return `<span style="cursor:pointer; border-bottom: 1px dashed #6d28d9; color:#6d28d9;" onclick="openIssueScheduleModal(${issue.id})" title="Change Schedule">${escapeHtml(asal)} ✏️</span>
+            <div class="u-mt-6">${status}</div>`;
+}

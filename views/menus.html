@@ -90,6 +90,13 @@
                 <span class="menu-card-aksi">Open &rarr;</span>
             </button>
 
+            <button class="menu-card" onclick="showView('view-manage-category')">
+                <span class="menu-card-ikon ikon-ungu">&#128467;</span>
+                <span class="menu-card-judul">Manage Categories</span>
+                <p class="menu-card-desc">Set issue categories and their show/hide schedule.</p>
+                <span class="menu-card-aksi">Open &rarr;</span>
+            </button>
+
             <button class="menu-card" onclick="showView('view-login-logs')">
                 <span class="menu-card-ikon ikon-langit">&#128337;</span>
                 <span class="menu-card-judul">Login Activity</span>
@@ -125,10 +132,9 @@
 </div>
 
 <!-- Langkah baru di alur PIC: menu -> KATEGORI -> tabel per kategori.
-     Markupnya STATIS. JS hanya mengisi angka pada elemen yang sudah ada di sini; tidak
-     ada innerHTML yang membangun ulang grid, jadi biayanya mendekati nol.
-     Keempat kategori selalu tampil di posisi yang sama, termasuk yang kosong -- posisi
-     tetap itu yang bisa dihafal; kartu yang muncul-hilang memaksa orang mencari tiap kali. -->
+     Kartu dirender gambarKategoriPic() dari daftar kategori yang dikelola MD (menu Manage
+     Categories), dalam urutan yang ditetapkan MD. Kategori kosong tetap tampil di posisinya
+     -- posisi tetap itu yang bisa dihafal; kartu yang muncul-hilang memaksa orang mencari. -->
 <div id="view-pic-category" class="screen">
     <div class="menu-page">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
@@ -144,34 +150,6 @@
              sekilas, tanpa perlu membuka satu kartu pun. -->
         <div id="pic-cat-alert" class="pic-alert pic-alert-aman" style="margin-top: 0; margin-bottom: 18px;"></div>
 
-        <div class="menu-grid">
-            <button class="menu-card" id="pic-cat-Daily" onclick="bukaKategoriPic('Daily')">
-                <span class="menu-card-ikon ikon-indigo menu-card-mono">D</span>
-                <span class="menu-card-judul">Daily<span class="menu-card-badge" id="pic-cat-badge-Daily" hidden></span></span>
-                <p class="menu-card-desc" id="pic-cat-desc-Daily">&mdash;</p>
-                <span class="menu-card-aksi">Open &rarr;</span>
-            </button>
-
-            <button class="menu-card" id="pic-cat-Weekly" onclick="bukaKategoriPic('Weekly')">
-                <span class="menu-card-ikon ikon-ungu menu-card-mono">W</span>
-                <span class="menu-card-judul">Weekly BOD<span class="menu-card-badge" id="pic-cat-badge-Weekly" hidden></span></span>
-                <p class="menu-card-desc" id="pic-cat-desc-Weekly">&mdash;</p>
-                <span class="menu-card-aksi">Open &rarr;</span>
-            </button>
-
-            <button class="menu-card" id="pic-cat-Midyear" onclick="bukaKategoriPic('Midyear')">
-                <span class="menu-card-ikon ikon-teal menu-card-mono">M</span>
-                <span class="menu-card-judul">Midyear<span class="menu-card-badge" id="pic-cat-badge-Midyear" hidden></span></span>
-                <p class="menu-card-desc" id="pic-cat-desc-Midyear">&mdash;</p>
-                <span class="menu-card-aksi">Open &rarr;</span>
-            </button>
-
-            <button class="menu-card" id="pic-cat-Annual" onclick="bukaKategoriPic('Annual')">
-                <span class="menu-card-ikon ikon-amber menu-card-mono">A</span>
-                <span class="menu-card-judul">Annual<span class="menu-card-badge" id="pic-cat-badge-Annual" hidden></span></span>
-                <p class="menu-card-desc" id="pic-cat-desc-Annual">&mdash;</p>
-                <span class="menu-card-aksi">Open &rarr;</span>
-            </button>
-        </div>
+        <div class="menu-grid" id="pic-cat-grid"></div>
     </div>
 </div>

@@ -1,6 +1,8 @@
 // js/issue-dashboard.js
 import { API_URL, getAuthHeaders } from './config.js';
-import { showCustomAlert, showView, getStatusBadge, getDailyUpdateBadge, formatWitaDate, formatWitaDateTime, debounce, escapeHtml, blokTugasPic, tugasTertunda, LABEL_KATEGORI, URUTAN_KATEGORI, BLOK_BELUM, urutkanIssueStatusTanggal, msDibuat, ambilIssueRingkas, lupakanCacheIssue, ambilUsers } from './utils.js';
+import { showCustomAlert, showView, getStatusBadge, getDailyUpdateBadge, formatWitaDate, formatWitaDateTime, debounce, escapeHtml, blokTugasPic, tugasTertunda, BLOK_BELUM, BLOK_TERJADWAL, issueTersembunyi, peranTerbatasJadwal, urutkanIssueStatusTanggal, msDibuat, ambilIssueRingkas, lupakanCacheIssue, ambilUsers } from './utils.js';
+import { muatKategori, daftarKategori, cariKategori, kategoriDefault, labelKategori } from './categories.js';
+import { deskripsiVisibilitas } from './schedule-form.js';
 import { state } from './issue-state.js';
 import { openDetailView } from './issue-detail.js';
 import { exportFilteredIssuesToPDF } from './issue-pdf.js';
@@ -128,8 +130,15 @@ export async function loadDashboardMD() {
         const [, issues] = await Promise.all([
             fetchUsersForMapping(),
             ambilIssueRingkas(),
+            // Untuk label kategori di tabel. Gagal pun tabel tetap tampil (nama mentah).
+            muatKategori().catch(() => null),
         ]);
         state.globalIssues = issues;
+
+        // KTT memang tidak pernah melihat issue tersembunyi, jadi filter jadwal tidak berarti apa-apa baginya.
+        const grupJadwal = document.getElementById('filter-visibility-grup');
+        if (grupJadwal) grupJadwal.hidden = localStorage.getItem('user_role') !== 'MD';
+
         applyFilterMD();
     } catch (error) { console.error(error); }
 }
@@ -143,6 +152,9 @@ export function applyFilterMD() {
     const statusFilter = document.getElementById('filter-status-md').value;
     const scaleFilter = document.getElementById('filter-scale-md').value;
     const categoryFilter = document.getElementById('filter-category-md').value;
+    const visibilityFilter = document.getElementById('filter-visibility-md')?.value || 'All';
+    // KTT (dan Dept Head, bila suatu saat diberi akses) tidak melihat issue di luar jadwal tampilnya.
+    const sembunyikanTerjadwal = peranTerbatasJadwal();
     const startDateFilter = document.getElementById('filter-date-start-md').value;
     const endDateFilter = document.getElementById('filter-date-end-md').value;
 
@@ -170,6 +182,10 @@ export function applyFilterMD() {
         const matchStatus = (statusFilter === 'All') || (item.status === statusFilter);
         const matchScale = (scaleFilter === 'All') || (item.priority === scaleFilter);
         const matchCategory = (categoryFilter === 'All') || (item.category === categoryFilter);
+        const tersembunyi = issueTersembunyi(item);
+        if (sembunyikanTerjadwal && tersembunyi) return false;
+        if (visibilityFilter === 'Visible' && tersembunyi) return false;
+        if (visibilityFilter === 'Hidden' && !tersembunyi) return false;
 
         // Perbandingan Date >= Date di versi lama sebenarnya membandingkan milidetik, jadi
         // bentuk ini setara -- TAPI perhatikan bentuk negasinya, itu bukan gaya penulisan.
@@ -324,10 +340,15 @@ function renderMDTable() {
             prioBadge = `<span class="badge badge-prio md-editable-badge" data-id="${item.id}" data-prio="${prioAman}" onclick="openPriorityModal(this.dataset.id, this.dataset.prio)" title="Change Priority">${prioAman}</span>`;
         }
 
-        const categoryAman = escapeHtml(item.category || '-');
+        const categoryAman = escapeHtml(item.category ? labelKategori(item.category) : '-');
         let categoryBadge = `<span class="badge badge-category">${categoryAman}</span>`;
         if (isMD) {
-            categoryBadge = `<span class="badge badge-category md-editable-badge" data-id="${item.id}" data-cat="${escapeHtml(item.category || 'Daily')}" onclick="openCategoryModal(this.dataset.id, this.dataset.cat)" title="Change Category">${categoryAman}</span>`;
+            categoryBadge = `<span class="badge badge-category md-editable-badge" data-id="${item.id}" data-cat="${escapeHtml(item.category || kategoriDefault())}" onclick="openCategoryModal(this.dataset.id, this.dataset.cat)" title="Change Category">${categoryAman}</span>`;
+            // Hanya MD yang pernah melihat issue tersembunyi; penanda ini memberi tahu kenapa
+            // Dept Head-nya tidak melihat issue tersebut hari ini. Klik -> atur jadwal issue.
+            if (issueTersembunyi(item)) {
+                categoryBadge += `<span class="badge badge-hidden md-editable-badge" onclick="openIssueScheduleModal(${item.id})" title="${escapeHtml(deskripsiVisibilitas(item.visibility))}">&#128339; Hidden</span>`;
+            }
         }
 
         rowsHTML += `<tr>
@@ -487,8 +508,11 @@ function renderPICTable(issues) {
     // Disaring ke kategori yang dipilih di layar kategori. Kalau belum ada yang dipilih
     // (mis. masuk lewat tautan lama), seluruh tugas ditampilkan -- lebih baik menampilkan
     // semuanya daripada layar kosong yang tidak bisa dijelaskan.
+    // Issue di luar jadwal tampilnya tidak ada sama sekali bagi Dept Head -- termasuk yang
+    // hanya pernah ia pegang (blok arsip).
     const kat = state.picKategori;
-    const terpakai = kat ? issues.filter(i => (i.category || 'Daily') === kat) : issues;
+    const tampil = issues.filter(i => !issueTersembunyi(i));
+    const terpakai = kat ? tampil.filter(i => kategoriKartu(i) === kat) : tampil;
 
     state.picIssues = terpakai;
     const userId = String(localStorage.getItem('user_id'));
@@ -562,7 +586,7 @@ function gambarBlokPic() {
         daftar.forEach(item => {
             nomor++;
             urutTampil.push(item.id);
-            const kategori = LABEL_KATEGORI[item.category] || item.category || '-';
+            const kategori = item.category ? labelKategori(item.category) : '-';
 
             html += `<tr${kelasBaris}>
                 <td style="text-align: center;">${nomor}</td>
@@ -585,47 +609,64 @@ function gambarBlokPic() {
 // konteks setelah melewati layar kategori.
 function perbaruiJudulPic(kategori) {
     const judul = document.getElementById('pic-list-title');
-    if (judul) judul.innerText = kategori ? ('Task List — ' + (LABEL_KATEGORI[kategori] || kategori)) : 'Task List';
+    if (judul) judul.innerText = kategori ? ('Task List — ' + labelKategori(kategori)) : 'Task List';
 }
 
+// Kartu tempat sebuah issue dihitung: nama kanonik kategorinya, atau kategori default bila
+// kategorinya tidak dikenal (mis. sudah dihapus dari DB) -- supaya tidak ada tugas yang hilang.
+function kategoriKartu(issue) {
+    const k = cariKategori(issue.category);
+    return k ? k.name : kategoriDefault();
+}
+
+// Warna ubin bergiliran menurut urutan kartu.
+const WARNA_KARTU = ['ikon-indigo', 'ikon-ungu', 'ikon-teal', 'ikon-amber', 'ikon-langit'];
+
 // -- Layar kategori PIC -------------------------------------------------------
-// Markupnya STATIS di views/menus.html; fungsi ini hanya mengisi angka pada elemen yang
-// sudah ada. Tidak ada innerHTML yang membangun ulang grid, jadi biayanya mendekati nol.
+// Kartu dibangun dari daftar kategori yang dikelola MD, dalam urutan yang ditetapkan MD.
+// Kategori nonaktif hanya tampil bila masih ada tugas aktif di dalamnya.
 //
 // Hitungannya memakai blokTugasPic() -- predikat yang SAMA dengan checkDailyUpdates() --
 // supaya angka merah di kartu benar-benar mewakili apa yang mengunci tombol Logout.
 // Satu lintasan menghasilkan total DAN tunggakan per kategori sekaligus.
 function gambarKategoriPic() {
     const userId = String(localStorage.getItem('user_id'));
-    const hitung = {};
-    URUTAN_KATEGORI.forEach(k => { hitung[k] = { total: 0, belum: 0 }; });
+    const hitung = new Map();
+    daftarKategori().forEach(k => hitung.set(k.name, { total: 0, belum: 0 }));
 
     (state.globalIssues || []).forEach(item => {
         const blok = blokTugasPic(item, userId);
-        if (blok === 'arsip') return;                 // Closed / sudah dioper: bukan tugas aktif
-        const kat = URUTAN_KATEGORI.includes(item.category) ? item.category : 'Daily';
-        hitung[kat].total++;
-        if (blok === BLOK_BELUM) hitung[kat].belum++;
+        // Closed / sudah dioper / di luar jadwal tampil: bukan tugas aktif hari ini.
+        if (blok === 'arsip' || blok === BLOK_TERJADWAL) return;
+        const kat = kategoriKartu(item);
+        if (!hitung.has(kat)) hitung.set(kat, { total: 0, belum: 0 });
+        hitung.get(kat).total++;
+        if (blok === BLOK_BELUM) hitung.get(kat).belum++;
     });
 
     let totalBelum = 0;
-    URUTAN_KATEGORI.forEach(kat => {
-        const { total, belum } = hitung[kat];
+    let html = '';
+    let urut = 0;
+    hitung.forEach(({ total, belum }, nama) => {
         totalBelum += belum;
+        const k = cariKategori(nama);
+        if (k && !k.isActive && total === 0) return;
 
-        const kartu = document.getElementById('pic-cat-' + kat);
-        const badge = document.getElementById('pic-cat-badge-' + kat);
-        const desc = document.getElementById('pic-cat-desc-' + kat);
-
-        if (desc) desc.innerText = total === 0 ? 'No active tasks.' : (total + ' active task' + (total === 1 ? '' : 's') + ' assigned to you.');
-        if (badge) {
-            badge.innerText = belum + ' not updated';
-            badge.hidden = belum === 0;
-        }
+        const label = labelKategori(nama);
+        const warna = WARNA_KARTU[urut++ % WARNA_KARTU.length];
+        const desc = total === 0 ? 'No active tasks.' : (total + ' active task' + (total === 1 ? '' : 's') + ' assigned to you.');
         // Kategori kosong tetap di posisinya, hanya diredupkan -- posisi tetap itu yang
         // bisa dihafal; kartu yang muncul-hilang memaksa orang mencari tiap kali.
-        if (kartu) kartu.classList.toggle('menu-card-kosong', total === 0);
+        html += `<button class="menu-card${total === 0 ? ' menu-card-kosong' : ''}" data-kat="${escapeHtml(nama)}" onclick="bukaKategoriPic(this.dataset.kat)">
+            <span class="menu-card-ikon ${warna} menu-card-mono">${escapeHtml(label.charAt(0).toUpperCase())}</span>
+            <span class="menu-card-judul">${escapeHtml(label)}<span class="menu-card-badge"${belum === 0 ? ' hidden' : ''}>${belum} not updated</span></span>
+            <p class="menu-card-desc">${desc}</p>
+            <span class="menu-card-aksi">Open &rarr;</span>
+        </button>`;
     });
+
+    const grid = document.getElementById('pic-cat-grid');
+    if (grid) grid.innerHTML = html;
 
     const strip = document.getElementById('pic-cat-alert');
     if (strip) {
@@ -648,6 +689,8 @@ export async function muatKategoriPic() {
         const [, issues] = await Promise.all([
             fetchUsersForMapping(),
             ambilIssueRingkas(),
+            // Gagal memuat kategori tidak boleh menyembunyikan tugas: semua jatuh ke kartu default.
+            muatKategori().catch(() => null),
         ]);
         state.globalIssues = issues;
         dataPicSegar = true;
@@ -659,7 +702,8 @@ export async function muatKategoriPic() {
 
 // Dibuka ke window di js/app.js; dipanggil onclick kartu kategori.
 export function bukaKategoriPic(kategori) {
-    state.picKategori = URUTAN_KATEGORI.includes(kategori) ? kategori : null;
+    const k = cariKategori(kategori);
+    state.picKategori = k ? k.name : null;
     window.showView('view-pic-update');
 }
 

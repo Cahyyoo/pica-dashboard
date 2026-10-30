@@ -2,6 +2,7 @@
 import { showCustomAlert, formatWitaDate, formatWitaDateTime, stripAutoForwardNotes, archiveMOMRecord, buildArchiveIssues, getBase64Image, reportActivity, saringIssueUntukEkspor, riwayatTerbaru, beriNapasUI } from './utils.js';
 import { state } from './issue-state.js';
 import { exportFilteredIssuesToExcel } from './issue-excel-export.js';
+import { labelKategori } from './categories.js';
 
 // =========================================================================
 // PEMUAT jsPDF YANG MALAS (LAZY)
@@ -92,7 +93,7 @@ export async function exportSingleIssueToPDF() {
             ["Target Due Date:", formatWitaDate(issue.dueDate)],
             ["PIC Assigned:", picName],
             ["Priority Scale:", issue.priority],
-            ["Category:", issue.category || '-'],
+            ["Category:", issue.category ? labelKategori(issue.category) : '-'],
             ["Current Status:", issue.status],
         ],
         columnStyles: {
@@ -528,7 +529,7 @@ export async function exportFilteredIssuesToPDF(role, momData = null) {
             formatWitaDate(item.dueDate, 'en-US'),
             item.status,
             remarks,
-            item.category || '-',
+            item.category ? labelKategori(item.category) : '-',
             item.priority || 'Prio 2'
         ];
     });
