@@ -456,9 +456,10 @@ function checkServerConnection() {
 }
 const OFFICE_SSIDS = ['SPRM-MGT', 'SPRM-GUEST', 'SPRM-CCTV', 'SPRM-CORP'];
 
-// SSID kantor yang BENAR-BENAR menjangkau backend. Kalau backend tak terjangkau tapi SSID ini
-// terlihat di sekitar, app mencoba PINDAH ke sini dulu sebelum menyerah dan menunggu di background.
-const TARGET_SSID = 'SPRM-CORP';
+// SSID kantor yang BENAR-BENAR menjangkau backend. Kalau backend tak terjangkau tapi device ada di
+// kantor, app mencoba PINDAH ke sini sebelum menyerah dan menunggu di background. Urutannya adalah
+// PRIORITAS: dicoba satu per satu, berhenti di SSID pertama yang terbukti menjangkau backend.
+const TARGET_SSIDS = ['SPRM-CORP', 'SPRM-MGT'];
 
 // Probe internet publik. Memakai endpoint NCSI milik Windows sendiri -- inilah yang dipakai
 // Windows untuk memutuskan ikon "No internet", jadi kalau jaringan kantor mengizinkan sesuatu
@@ -469,9 +470,9 @@ const INTERNET_PROBE_URL = 'http://www.msftconnecttest.com/connecttest.txt';
 const INTERNET_PROBE_BODY = 'Microsoft Connect Test';
 const INTERNET_PROBE_TIMEOUT_MS = 2500;
 
-// SPRM-CORP yang tidak memberi internet langsung dianggap gagal, tanpa repot mengecek backend.
-// Aman dipakai karena SUDAH DIKONFIRMASI: VLAN SPRM-CORP mengizinkan akses keluar, jadi gerbang
-// ini tidak akan membuang jaringan yang sebenarnya sehat.
+// SSID target yang tidak memberi internet langsung dianggap gagal, tanpa repot mengecek backend.
+// Aman dipakai karena SUDAH DIKONFIRMASI: VLAN SPRM-CORP dan SPRM-MGT sama-sama mengizinkan akses
+// keluar, jadi gerbang ini tidak akan membuang jaringan yang sebenarnya sehat.
 // Balik ke false HANYA kalau suatu saat VLAN kantor memblokir internet keluar tapi tetap
 // melayani backend internal -- cek internet lalu turun peran jadi sekadar "tunggu DHCP selesai".
 const REQUIRE_INTERNET_ON_TARGET = true;
@@ -577,18 +578,20 @@ function isSwitchableSsid(ssid) {
     return ssid === 'SPRM-GUEST' || !OFFICE_SSIDS.includes(ssid);
 }
 
-// Apakah profil WiFi `ssid` sudah tersimpan di laptop ini? Inilah alasan app TIDAK perlu menyimpan
-// password WiFi kantor di dalam kodenya: kita hanya menyambung ulang ke profil yang memang sudah
-// pernah dibuat user/IT di device ini. Perintah ini murah -- cuma baca konfigurasi tersimpan,
-// tidak memicu scan radio seperti `show networks`.
-function hasSavedProfile(ssid) {
+// SSID dari `daftar` yang profil WiFi-nya sudah tersimpan di laptop ini, urutan `daftar`
+// dipertahankan. Inilah alasan app TIDAK perlu menyimpan password WiFi kantor di dalam kodenya:
+// kita hanya menyambung ulang ke profil yang memang sudah pernah dibuat user/IT di device ini.
+// Satu kali baca untuk semua SSID -- perintah ini murah (cuma baca konfigurasi tersimpan, tidak
+// memicu scan radio seperti `show networks`), tapi tetap tidak perlu diulang per SSID.
+function profilTersimpan(daftar) {
     return new Promise((resolve) => {
         try {
             execFile('netsh', ['wlan', 'show', 'profiles'], NETSH_OPTS, (err, stdout) => {
-                resolve(!err && !!stdout && stdout.includes(ssid));
+                if (err || !stdout) return resolve([]);
+                resolve(daftar.filter(ssid => stdout.includes(ssid)));
             });
         } catch (e) {
-            resolve(false);
+            resolve([]);
         }
     });
 }
@@ -621,20 +624,21 @@ function disconnectWifi() {
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Cegah percobaan pindah WiFi menumpuk: satu siklus bisa memakan ~65 detik, sementara
-// pemanggilnya (patroli background) berjalan berkala.
+// Cegah percobaan pindah WiFi menumpuk: satu siklus bisa memakan ~90 detik (bila SPRM-CORP lalu
+// SPRM-MGT sama-sama dicoba), sementara pemanggilnya (patroli background) berjalan berkala.
 let wifiJoinInProgress = false;
 
 // Setelah satu percobaan pemindahan gagal, jangan menyentuh WiFi user lagi untuk sementara.
 // Tanpa ini pengembalian SSID di bawah justru merusak koneksi user berulang-ulang: dulu
-// percobaan yang gagal meninggalkan laptop di SPRM-CORP dan siklus berikutnya berhenti sendiri
+// percobaan yang gagal meninggalkan laptop di SSID target dan siklus berikutnya berhenti sendiri
 // karena SSID aktif sudah = target -- itu rem alaminya. Begitu SSID asal dikembalikan, rem itu
 // hilang. Selama masa tenang patroli tetap jalan, tapi hanya mengecek backend (murah).
 const JOIN_COOLDOWN_MS = 10 * 60 * 1000; // 10 menit
 let joinCooldownUntil = 0;
 
-// Batas menyerah. Tiga percobaan penuh yang gagal (@ ~65 dtk + tenang 10 menit) berarti app sudah
-// menghabiskan ~23 menit tanpa hasil: jaringan di tempat ini memang tidak bisa dipakai hari ini.
+// Batas menyerah. Tiga percobaan penuh yang gagal (@ ~90 dtk + tenang 10 menit) berarti app sudah
+// menghabiskan ~25 menit tanpa hasil: jaringan di tempat ini memang tidak bisa dipakai hari ini.
+// Satu "percobaan penuh" = satu putaran SEMUA SSID target, bukan per SSID.
 // Terus mengintai hanya membuang baterai dan tiap 10 menit berisiko menyentuh WiFi user lagi,
 // jadi app BERHENTI SENDIRI (lihat patrolTick). Hitungan ini sengaja hidup di dalam proses:
 // begitu app mati angkanya ikut hilang, sehingga laptop yang dinyalakan ulang -- atau app yang
@@ -642,9 +646,53 @@ let joinCooldownUntil = 0;
 const MAX_FAILED_SWEEPS = 3;
 let failedSweeps = 0;
 
-// INTI FITUR: coba pindahkan koneksi ke WiFi kantor, lalu PASTIKAN backend benar-benar terjangkau.
-// Hanya resolve(true) kalau backend menjawab SETELAH perpindahan -- bukan sekadar "perintah netsh
-// tidak error". Selain itu selalu false, dan pemanggil akan menunggu di background.
+// Satu percobaan pindah ke `ssid`, lalu BUKTIKAN hasilnya. Tidak memulihkan apa pun -- itu urusan
+// pemanggil, yang tahu apakah masih ada SSID lain untuk dicoba.
+//   tersambung: netsh menerima perintah (false = koneksi user sama sekali tidak berubah)
+//   internetOk: jaringan ini punya internet
+//   backendOk : backend terjangkau dari jaringan ini -- satu-satunya tanda sukses
+async function cobaPindahKe(ssid) {
+    const hasil = { tersambung: false, internetOk: false, backendOk: false };
+
+    if (!(await connectToSsid(ssid))) {
+        log.info('Perintah pindah ke ' + ssid + ' ditolak Windows.');
+        return hasil;
+    }
+    hasil.tersambung = true;
+
+    // `netsh wlan connect` melapor SUKSES duluan, sebelum asosiasi + DHCP selesai. Jeda
+    // singkat sekali di sini, sisanya ditunggu oleh loop verifikasi di bawah.
+    await delay(PROBE_GAP_MS);
+
+    // ===== CEK INTERNET =====
+    // Loop ini merangkap dua tugas: menunggu DHCP benar-benar selesai, dan memutuskan apakah
+    // jaringan ini layak dipakai sama sekali.
+    for (let i = 0; i < 3; i++) {
+        if (await hasInternetConnection()) { hasil.internetOk = true; break; }
+        await delay(PROBE_GAP_MS);
+    }
+    if (!hasil.internetOk) log.info(ssid + ' tersambung tapi tidak ada internet.');
+
+    // ===== CEK BACKEND -- satu-satunya jalan menuju sukses =====
+    // Keberhasilan WAJIB dibuktikan lewat backend, bukan lewat exit code netsh.
+    if (hasil.internetOk || !REQUIRE_INTERNET_ON_TARGET) {
+        for (let i = 0; i < 2; i++) {
+            if (await checkServerConnection()) {
+                log.info('Berhasil pindah ke ' + ssid + ' dan backend terjangkau.');
+                hasil.backendOk = true;
+                return hasil;
+            }
+            await delay(PROBE_GAP_MS);
+        }
+        log.info(ssid + ' hidup tapi backend tetap tak terjangkau.');
+    }
+    return hasil;
+}
+
+// INTI FITUR: coba pindahkan koneksi ke WiFi kantor -- SSID di TARGET_SSIDS sesuai urutan
+// prioritasnya -- lalu PASTIKAN backend benar-benar terjangkau. Hanya resolve(true) kalau backend
+// menjawab SETELAH perpindahan -- bukan sekadar "perintah netsh tidak error". Selain itu selalu
+// false, dan pemanggil akan menunggu di background.
 async function tryJoinOfficeWifiAndVerify() {
     if (wifiJoinInProgress) return false;
     wifiJoinInProgress = true;
@@ -675,44 +723,33 @@ async function tryJoinOfficeWifiAndVerify() {
         // [G2] Sudah di jaringan kantor yang sah? Berarti masalahnya di SERVER, bukan di WiFi.
         if (!isSwitchableSsid(originalSsid)) return false;
 
-        // [G3] Tidak ada profil tersimpan -- berhenti SEBELUM apa pun diubah, koneksi user utuh.
-        if (!(await hasSavedProfile(TARGET_SSID))) return false;
+        // [G3] Tidak ada profil SSID target yang tersimpan -- berhenti SEBELUM apa pun diubah,
+        // koneksi user utuh.
+        const kandidat = await profilTersimpan(TARGET_SSIDS);
+        if (kandidat.length === 0) return false;
 
         log.info('Backend mati & device ada di kantor (SSID sekarang: '
-               + (originalSsid || 'tidak ada') + ') -- mencoba pindah ke ' + TARGET_SSID + '...');
-        if (!(await connectToSsid(TARGET_SSID))) {
-            // netsh menolak = koneksi user tidak berubah sama sekali, jadi tidak ada yang perlu
-            // dipulihkan dan percobaan ini tidak dihitung sebagai kegagalan.
-            log.info('Perintah pindah ke ' + TARGET_SSID + ' ditolak Windows.');
-            return false;
-        }
+               + (originalSsid || 'tidak ada') + ') -- mencoba pindah ke ' + kandidat.join(' lalu ') + '...');
 
-        // `netsh wlan connect` melapor SUKSES duluan, sebelum asosiasi + DHCP selesai. Jeda
-        // singkat sekali di sini, sisanya ditunggu oleh loop verifikasi di bawah.
-        await delay(PROBE_GAP_MS);
-
-        // ===== LANGKAH 2b: CEK INTERNET di SPRM-CORP =====
-        // Loop ini merangkap dua tugas: menunggu DHCP benar-benar selesai, dan memutuskan apakah
-        // jaringan ini layak dipakai sama sekali.
-        let internetOk = false;
-        for (let i = 0; i < 3; i++) {
-            if (await hasInternetConnection()) { internetOk = true; break; }
-            await delay(PROBE_GAP_MS);
-        }
-        if (!internetOk) log.info(TARGET_SSID + ' tersambung tapi tidak ada internet.');
-
-        // ===== LANGKAH 2c: CEK BACKEND -- satu-satunya jalan menuju sukses =====
-        // Keberhasilan WAJIB dibuktikan lewat backend, bukan lewat exit code netsh.
-        if (internetOk || !REQUIRE_INTERNET_ON_TARGET) {
-            for (let i = 0; i < 2; i++) {
-                if (await checkServerConnection()) {
-                    log.info('Berhasil pindah ke ' + TARGET_SSID + ' dan backend terjangkau.');
-                    return true;
-                }
-                await delay(PROBE_GAP_MS);
+        // ===== LANGKAH 2b: COBA SSID TARGET SESUAI URUTAN PRIORITAS =====
+        // Langsung lanjut ke SSID berikutnya tanpa kembali dulu ke SSID asal -- bolak-balik di
+        // antara percobaan hanya menambah satu kali putus-sambung bagi user.
+        // `internetTerakhir` = status internet jaringan yang TERAKHIR berhasil disambungi, yaitu
+        // jaringan tempat laptop berada kalau semua percobaan gagal (dipakai Lapis 1 di bawah).
+        let adaYangTersambung = false;
+        let internetTerakhir = false;
+        for (const ssid of kandidat) {
+            const hasil = await cobaPindahKe(ssid);
+            if (hasil.backendOk) return true;
+            if (hasil.tersambung) {
+                adaYangTersambung = true;
+                internetTerakhir = hasil.internetOk;
             }
-            log.info(TARGET_SSID + ' hidup tapi backend tetap tak terjangkau.');
         }
+
+        // Semua perintah ditolak netsh = koneksi user tidak berubah sama sekali, jadi tidak ada
+        // yang perlu dipulihkan dan putaran ini tidak dihitung sebagai kegagalan.
+        if (!adaYangTersambung) return false;
 
         // ===== JAMINAN INTERNET =====
         // Perpindahan gagal. Mulai titik ini app BERHENTI mengejar backend; satu-satunya tujuan
@@ -726,9 +763,10 @@ async function tryJoinOfficeWifiAndVerify() {
         failedSweeps++;
         log.info('Percobaan pemulihan gagal (' + failedSweeps + '/' + MAX_FAILED_SWEEPS + ').');
 
-        // Lapis 1 -- kalau SPRM-CORP ternyata masih punya internet (cuma backend-nya yang mati),
-        // tidak ada yang perlu dipindahkan. Nilainya sudah diketahui dari loop di atas.
-        if (internetOk) return false;
+        // Lapis 1 -- kalau SSID target tempat laptop sekarang berada ternyata masih punya internet
+        // (cuma backend-nya yang mati), tidak ada yang perlu dipindahkan. Nilainya sudah diketahui
+        // dari loop di atas.
+        if (internetTerakhir) return false;
 
         // Lapis 2 -- kembalikan jaringan yang tadi dipakai user, lalu BUKTIKAN internetnya hidup.
         // Pengembalian yang gagal diam-diam (hotspot sudah dimatikan, sudah di luar jangkauan,
@@ -749,7 +787,7 @@ async function tryJoinOfficeWifiAndVerify() {
         // Windows memilih profil lain dan user melihat pemilih jaringan alih-alih ikon
         // "tersambung" yang menipu.
         await disconnectWifi();
-        log.warn('Tidak ada jaringan yang bisa dipakai: ' + TARGET_SSID + ' buntu dan jaringan '
+        log.warn('Tidak ada jaringan yang bisa dipakai: ' + kandidat.join(' & ') + ' buntu dan jaringan '
                + 'asal tidak bisa dipulihkan. WiFi dilepas supaya Windows bisa memilih sendiri.');
         return false;
     } finally {
@@ -759,7 +797,7 @@ async function tryJoinOfficeWifiAndVerify() {
 }
 
 // Patroli saat app BELUM terbuka: app diam di background sampai backend benar-benar terjangkau.
-// Memakai setTimeout BERANTAI, bukan setInterval -- satu siklus bisa memakan ~65 detik (percobaan
+// Memakai setTimeout BERANTAI, bukan setInterval -- satu siklus bisa memakan ~90 detik (percobaan
 // pindah WiFi + verifikasi), dan setInterval akan menembakkan siklus baru di tengah siklus yang
 // belum selesai. Jeda melar 10s -> 60s selama masih gagal supaya laptop yang ditinggal menyala di
 // rumah tidak mengecek terus-menerus; direset ke 10s saat laptop bangun/di-unlock, momen paling
