@@ -40,6 +40,8 @@ window.showView = (viewId) => {
     else if (viewId === 'view-admin') loadAdminUsers();
     else if (viewId === 'view-manage-dept') loadAdminDepartments();
     else if (viewId === 'view-manage-category') loadAdminCategories();
+    // Form Create New Report: dropdown kategori selalu memakai daftar terbaru dari MD.
+    else if (viewId === 'view-user') muatDropdownKategori();
     else if (viewId === 'view-mom-archive') loadMOMArchives();
     else if (viewId === 'view-login-logs') loadLoginLogs();
     // Menu PIC: segarkan penanda tunggakan di tombol "Update Task List".

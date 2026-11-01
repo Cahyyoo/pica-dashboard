@@ -1,7 +1,7 @@
 // js/issue-dashboard.js
 import { API_URL, getAuthHeaders } from './config.js';
 import { showCustomAlert, showView, getStatusBadge, getDailyUpdateBadge, formatWitaDate, formatWitaDateTime, debounce, escapeHtml, blokTugasPic, tugasTertunda, BLOK_BELUM, BLOK_TERJADWAL, issueTersembunyi, peranTerbatasJadwal, urutkanIssueStatusTanggal, msDibuat, ambilIssueRingkas, lupakanCacheIssue, ambilUsers } from './utils.js';
-import { muatKategori, daftarKategori, cariKategori, kategoriDefault, labelKategori } from './categories.js';
+import { muatKategori, muatDropdownKategori, daftarKategori, cariKategori, kategoriDefault, labelKategori } from './categories.js';
 import { deskripsiVisibilitas } from './schedule-form.js';
 import { state } from './issue-state.js';
 import { openDetailView } from './issue-detail.js';
@@ -130,8 +130,10 @@ export async function loadDashboardMD() {
         const [, issues] = await Promise.all([
             fetchUsersForMapping(),
             ambilIssueRingkas(),
-            // Untuk label kategori di tabel. Gagal pun tabel tetap tampil (nama mentah).
-            muatKategori().catch(() => null),
+            // Label kategori di tabel + isi ulang filter Category, supaya kategori yang baru
+            // ditambahkan MD dari perangkat lain ikut muncul. Gagal pun tabel tetap tampil
+            // (muatDropdownKategori menangani galatnya sendiri).
+            muatDropdownKategori(),
         ]);
         state.globalIssues = issues;
 
